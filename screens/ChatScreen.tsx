@@ -15,7 +15,8 @@ import {
   Pressable,
   Dimensions,
   SafeAreaView,
-  RefreshControl
+  RefreshControl,
+  Animated
 } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -44,6 +45,14 @@ interface Message {
     full_name: string
     avatar_url?: string
   }
+  read_by?: string[] // Array of user IDs who have read this message
+  read_count?: number
+}
+
+interface TypingUser {
+  user_id: string
+  username: string
+  full_name: string
 }
 
 export default function ChatScreen() {
@@ -57,13 +66,20 @@ export default function ChatScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [hasUserChecked, setHasUserChecked] = useState(false)
   const [showChannelModal, setShowChannelModal] = useState(false)
-  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([])
+  const [channelMembers, setChannelMembers] = useState<Map<string, any>>(new Map())
   
   const flatListRef = useRef<FlatList>(null)
   const channelSubscriptionRef = useRef<RealtimeChannel | null>(null)
   const typingSubscriptionRef = useRef<RealtimeChannel | null>(null)
+  const readReceiptsSubscriptionRef = useRef<RealtimeChannel | null>(null)
   const fetchingRef = useRef(false)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Typing indicator animation
+  const dot1Anim = useRef(new Animated.Value(0)).current
+  const dot2Anim = useRef(new Animated.Value(0)).current
+  const dot3Anim = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
     if (user?.id) {
@@ -84,13 +100,21 @@ export default function ChatScreen() {
       supabase.removeChannel(typingSubscriptionRef.current)
       typingSubscriptionRef.current = null
     }
+    if (readReceiptsSubscriptionRef.current) {
+      supabase.removeChannel(readReceiptsSubscriptionRef.current)
+      readReceiptsSubscriptionRef.current = null
+    }
 
     if (selectedChannel?.id && user?.id) {
       fetchMessages(selectedChannel.id)
+      fetchChannelMembers(selectedChannel.id)
       const messageSubscription = setupRealtimeSubscription(selectedChannel.id)
       const typingSubscription = setupTypingSubscription(selectedChannel.id)
+      const readReceiptsSubscription = setupReadReceiptsSubscription(selectedChannel.id)
+      
       channelSubscriptionRef.current = messageSubscription
       typingSubscriptionRef.current = typingSubscription
+      readReceiptsSubscriptionRef.current = readReceiptsSubscription
     }
 
     return () => {
@@ -102,8 +126,45 @@ export default function ChatScreen() {
         supabase.removeChannel(typingSubscriptionRef.current)
         typingSubscriptionRef.current = null
       }
+      if (readReceiptsSubscriptionRef.current) {
+        supabase.removeChannel(readReceiptsSubscriptionRef.current)
+        readReceiptsSubscriptionRef.current = null
+      }
     }
   }, [selectedChannel?.id, user?.id])
+
+  // Animate typing dots
+  useEffect(() => {
+    if (typingUsers.length > 0) {
+      const createAnimation = (animValue: Animated.Value, delay: number) => {
+        return Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.timing(animValue, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+            Animated.timing(animValue, {
+              toValue: 0,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+          ])
+        )
+      }
+
+      const animation = Animated.parallel([
+        createAnimation(dot1Anim, 0),
+        createAnimation(dot2Anim, 150),
+        createAnimation(dot3Anim, 300),
+      ])
+
+      animation.start()
+
+      return () => animation.stop()
+    }
+  }, [typingUsers.length])
 
   // Cleanup typing timeout on unmount
   useEffect(() => {
@@ -148,7 +209,6 @@ export default function ChatScreen() {
           throw channelsError
         }
 
-        // OPTIMIZED: Batch fetch all unread counts at once
         const [readMessages, allMessages] = await Promise.all([
           supabase
             .from('chat_message_reads')
@@ -165,7 +225,6 @@ export default function ChatScreen() {
           readMessages.data?.map(msg => msg.message_id) || []
         )
 
-        // Group messages by channel
         const unreadByChannel = (allMessages.data || []).reduce((acc, msg) => {
           if (!readMessageIds.has(msg.id)) {
             acc[msg.channel_id] = (acc[msg.channel_id] || 0) + 1
@@ -184,7 +243,6 @@ export default function ChatScreen() {
         }
       } else {
         await addUserToDefaultChannels()
-        // Don't recursively call, just refetch once
         fetchingRef.current = false
         await fetchChannels()
       }
@@ -194,6 +252,36 @@ export default function ChatScreen() {
     } finally {
       setLoading(false)
       fetchingRef.current = false
+    }
+  }
+
+  const fetchChannelMembers = async (channelId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('channel_members')
+        .select(`
+          user_id,
+          profiles!inner (
+            id,
+            username,
+            full_name,
+            avatar_url
+          )
+        `)
+        .eq('channel_id', channelId)
+
+      if (error) throw error
+
+      const membersMap = new Map()
+      data?.forEach(member => {
+        if (member.profiles) {
+          membersMap.set(member.user_id, member.profiles)
+        }
+      })
+      
+      setChannelMembers(membersMap)
+    } catch (error) {
+      console.error('Error fetching channel members:', error)
     }
   }
 
@@ -277,122 +365,144 @@ export default function ChatScreen() {
     }
   }
 
-const fetchMessages = async (channelId: string) => {
-  if (!user) return
+  const fetchMessages = async (channelId: string) => {
+    if (!user) return
 
-  try {
-    // Now use the correct foreign key name
-    const { data: messagesData, error } = await supabase
-      .from('chat_messages')
-      .select(`
-        *,
-        profiles!fk_chat_messages_user_id (
-          id,
-          username,
-          full_name,
-          avatar_url
-        )
-      `)
-      .eq('channel_id', channelId)
-      .order('created_at', { ascending: true })
+    try {
+      const { data: messagesData, error } = await supabase
+        .from('chat_messages')
+        .select(`
+          *,
+          profiles!fk_chat_messages_user_id (
+            id,
+            username,
+            full_name,
+            avatar_url
+          )
+        `)
+        .eq('channel_id', channelId)
+        .order('created_at', { ascending: true })
 
-    if (error) throw error
+      if (error) throw error
 
-    setMessages(messagesData || [])
+      // Fetch read receipts for all messages
+      const messageIds = messagesData?.map(m => m.id) || []
+      const { data: readReceipts } = await supabase
+        .from('chat_message_reads')
+        .select('message_id, user_id')
+        .in('message_id', messageIds)
 
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true })
-    }, 100)
-    
-    await markMessagesAsRead(channelId)
-  } catch (error) {
-    console.error('Error fetching messages:', error)
-    Alert.alert('Error', 'Failed to load messages')
-  }
-}
-
-const setupRealtimeSubscription = (channelId: string): RealtimeChannel => {
-  const channel = supabase
-    .channel(`chat_messages:${channelId}:${Date.now()}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'chat_messages',
-        filter: `channel_id=eq.${channelId}`
-      },
-      async (payload) => {
-        if (!user) return
-
-        try {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('id, username, full_name, avatar_url')
-            .eq('id', payload.new.user_id)
-            .single()
-
-          const messageWithProfile = {
-            ...payload.new,
-            profiles: profile || { 
-              id: payload.new.user_id,
-              username: 'Unknown', 
-              full_name: 'Unknown User', 
-              avatar_url: null 
-            }
-          } as Message
-
-          setMessages(prev => {
-            // Don't add duplicate messages
-            const exists = prev.some(msg => 
-              msg.id === messageWithProfile.id || 
-              (msg.id.startsWith('temp-') && 
-               msg.content === messageWithProfile.content && 
-               msg.user_id === messageWithProfile.user_id)
-            )
-            
-            if (exists) {
-              // Replace temp message with real one
-              return prev.map(msg => 
-                msg.id.startsWith('temp-') && 
-                msg.content === messageWithProfile.content && 
-                msg.user_id === messageWithProfile.user_id
-                  ? messageWithProfile
-                  : msg
-              )
-            }
-            
-            return [...prev, messageWithProfile]
-          })
-          
-          if (payload.new.user_id !== user.id) {
-            await markMessageAsRead(payload.new.id)
-          }
-
-          setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: true })
-          }, 100)
-        } catch (error) {
-          console.error('Error in realtime subscription:', error)
+      // Group read receipts by message
+      const readsByMessage = (readReceipts || []).reduce((acc, read) => {
+        if (!acc[read.message_id]) {
+          acc[read.message_id] = []
         }
-      }
-    )
-    .on(
-      'postgres_changes',
-      {
-        event: 'DELETE',
-        schema: 'public',
-        table: 'chat_messages',
-        filter: `channel_id=eq.${channelId}`
-      },
-      (payload) => {
-        setMessages(prev => prev.filter(msg => msg.id !== payload.old.id))
-      }
-    )
-    .subscribe()
+        acc[read.message_id].push(read.user_id)
+        return acc
+      }, {} as Record<string, string[]>)
 
-  return channel
-}
+      // Add read receipts to messages
+      const messagesWithReads = (messagesData || []).map(msg => ({
+        ...msg,
+        read_by: readsByMessage[msg.id] || [],
+        read_count: (readsByMessage[msg.id] || []).length
+      }))
+
+      setMessages(messagesWithReads)
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true })
+      }, 100)
+      
+      await markMessagesAsRead(channelId)
+    } catch (error) {
+      console.error('Error fetching messages:', error)
+      Alert.alert('Error', 'Failed to load messages')
+    }
+  }
+
+  const setupRealtimeSubscription = (channelId: string): RealtimeChannel => {
+    const channel = supabase
+      .channel(`chat_messages:${channelId}:${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `channel_id=eq.${channelId}`
+        },
+        async (payload) => {
+          if (!user) return
+
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('id, username, full_name, avatar_url')
+              .eq('id', payload.new.user_id)
+              .single()
+
+            const messageWithProfile = {
+              ...payload.new,
+              profiles: profile || { 
+                id: payload.new.user_id,
+                username: 'Unknown', 
+                full_name: 'Unknown User', 
+                avatar_url: null 
+              },
+              read_by: [],
+              read_count: 0
+            } as Message
+
+            setMessages(prev => {
+              const exists = prev.some(msg => 
+                msg.id === messageWithProfile.id || 
+                (msg.id.startsWith('temp-') && 
+                 msg.content === messageWithProfile.content && 
+                 msg.user_id === messageWithProfile.user_id)
+              )
+              
+              if (exists) {
+                return prev.map(msg => 
+                  msg.id.startsWith('temp-') && 
+                  msg.content === messageWithProfile.content && 
+                  msg.user_id === messageWithProfile.user_id
+                    ? messageWithProfile
+                    : msg
+                )
+              }
+              
+              return [...prev, messageWithProfile]
+            })
+            
+            if (payload.new.user_id !== user.id) {
+              await markMessageAsRead(payload.new.id)
+            }
+
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true })
+            }, 100)
+          } catch (error) {
+            console.error('Error in realtime subscription:', error)
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `channel_id=eq.${channelId}`
+        },
+        (payload) => {
+          setMessages(prev => prev.filter(msg => msg.id !== payload.old.id))
+        }
+      )
+      .subscribe()
+
+    return channel
+  }
 
   const setupTypingSubscription = (channelId: string): RealtimeChannel => {
     const channel = supabase
@@ -405,7 +515,7 @@ const setupRealtimeSubscription = (channelId: string): RealtimeChannel => {
           table: 'typing_indicators',
           filter: `channel_id=eq.${channelId}`
         },
-        (payload) => {
+        async (payload) => {
           if (!user) return
           
           // Don't show own typing
@@ -415,17 +525,39 @@ const setupRealtimeSubscription = (channelId: string): RealtimeChannel => {
             
             // Only show typing if within last 3 seconds
             if (now - typedTime < 3000) {
-              setTypingUsers(prev => new Set(prev).add(payload.new.user_id))
+              // Fetch user profile
+              
+              const profile = channelMembers.get(payload.new.user_id) || {
+                id: payload.new.user_id,
+                username: 'Someone',
+                full_name: 'Someone'
+              }
+
+              setTypingUsers(prev => {
+                // Remove existing entry for this user
+                const filtered = prev.filter(u => u.user_id !== payload.new.user_id)
+                // Add new entry
+                return [...filtered, {
+                  user_id: payload.new.user_id,
+                  username: profile.username,
+                  full_name: profile.full_name
+                }]
+              })
               
               // Remove after 3 seconds
               setTimeout(() => {
-                setTypingUsers(prev => {
-                  const newSet = new Set(prev)
-                  newSet.delete(payload.new.user_id)
-                  return newSet
-                })
+                setTypingUsers(prev => 
+                  prev.filter(u => u.user_id !== payload.new.user_id)
+                )
               }, 3000)
             }
+          }
+
+          // Handle DELETE event
+          if (payload.eventType === 'DELETE' && payload.old) {
+            setTypingUsers(prev => 
+              prev.filter(u => u.user_id !== payload.old.user_id)
+            )
           }
         }
       )
@@ -434,7 +566,42 @@ const setupRealtimeSubscription = (channelId: string): RealtimeChannel => {
     return channel
   }
 
-  const handleTyping = useCallback(() => {
+  const setupReadReceiptsSubscription = (channelId: string): RealtimeChannel => {
+    const channel = supabase
+      .channel(`read_receipts:${channelId}:${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_message_reads'
+        },
+        (payload) => {
+          if (!user) return
+
+          // Update the specific message with new read receipt
+          setMessages(prev => prev.map(msg => {
+            if (msg.id === payload.new.message_id) {
+              const currentReadBy = msg.read_by || []
+              // Only add if not already in the list
+              if (!currentReadBy.includes(payload.new.user_id)) {
+                return {
+                  ...msg,
+                  read_by: [...currentReadBy, payload.new.user_id],
+                  read_count: (msg.read_count || 0) + 1
+                }
+              }
+            }
+            return msg
+          }))
+        }
+      )
+      .subscribe()
+
+    return channel
+  }
+
+  const handleTyping = useCallback(async () => {
     if (!selectedChannel || !user) return
     
     // Clear existing timeout
@@ -442,28 +609,37 @@ const setupRealtimeSubscription = (channelId: string): RealtimeChannel => {
       clearTimeout(typingTimeoutRef.current)
     }
     
-    // Debounce typing indicator
-    typingTimeoutRef.current = setTimeout(() => {
-      supabase
-        .from('typing_indicators')
-        .upsert({
-          channel_id: selectedChannel.id,
-          user_id: user.id,
-          last_typed: new Date().toISOString()
-        })
-        .then(() => {
-          // Auto-delete after 3 seconds
-          setTimeout(() => {
-            supabase
-              .from('typing_indicators')
-              .delete()
-              .eq('channel_id', selectedChannel.id)
-              .eq('user_id', user.id)
-              .then()
-          }, 3000)
-        })
+    // Debounce typing indicator - send update
+    typingTimeoutRef.current = setTimeout(async () => {
+      try {
+        await supabase
+          .from('typing_indicators')
+          .upsert({
+            channel_id: selectedChannel.id,
+            user_id: user.id,
+            last_typed: new Date().toISOString()
+          }, {
+            onConflict: 'channel_id,user_id'
+          })
+      } catch (error) {
+        console.error('Error updating typing indicator:', error)
+      }
     }, 300)
   }, [selectedChannel, user])
+
+  const clearTypingIndicator = async () => {
+    if (!selectedChannel || !user) return
+    
+    try {
+      await supabase
+        .from('typing_indicators')
+        .delete()
+        .eq('channel_id', selectedChannel.id)
+        .eq('user_id', user.id)
+    } catch (error) {
+      console.error('Error clearing typing indicator:', error)
+    }
+  }
 
   const markMessagesAsRead = async (channelId: string) => {
     if (!user) return
@@ -572,91 +748,83 @@ const setupRealtimeSubscription = (channelId: string): RealtimeChannel => {
   const sanitizeMessage = (text: string): string => {
     return text
       .trim()
-      .replace(/[<>]/g, '') // Basic XSS prevention
-      .slice(0, 500) // Enforce max length
+      .replace(/[<>]/g, '')
+      .slice(0, 500)
   }
 
-const sendMessage = async () => {
-  if (!message.trim() || !selectedChannel || !user) return
+  const sendMessage = async () => {
+    if (!message.trim() || !selectedChannel || !user) return
 
-  const sanitizedContent = sanitizeMessage(message)
-  if (!sanitizedContent) return
+    const sanitizedContent = sanitizeMessage(message)
+    if (!sanitizedContent) return
 
-  const optimisticMessage: Message = {
-    id: `temp-${Date.now()}`,
-    content: sanitizedContent,
-    channel_id: selectedChannel.id,
-    user_id: user.id,
-    created_at: new Date().toISOString(),
-    profiles: {
-      id: user.id,
-      username: user.email?.split('@')[0] || 'You',
-      full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'You',
-      avatar_url: user.user_metadata?.avatar_url
-    }
-  }
-
-  // Immediately update UI (Optimistic Update)
-  setMessages(prev => [...prev, optimisticMessage])
-  setMessage('')
-  
-  // Scroll to bottom
-  setTimeout(() => {
-    flatListRef.current?.scrollToEnd({ animated: true })
-  }, 100)
-
-  try {
-    setSending(true)
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .insert([
-        {
-          content: sanitizedContent,
-          channel_id: selectedChannel.id,
-          user_id: user.id
-        }
-      ])
-      .select(`
-        *,
-        profiles!fk_chat_messages_user_id (
-          id,
-          username,
-          full_name,
-          avatar_url
-        )
-      `)
-      .single()
-
-    if (error) throw error
-
-    // Replace temp message with real one
-    if (data) {
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === optimisticMessage.id ? data : msg
-        )
-      )
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      content: sanitizedContent,
+      channel_id: selectedChannel.id,
+      user_id: user.id,
+      created_at: new Date().toISOString(),
+      profiles: {
+        id: user.id,
+        username: user.email?.split('@')[0] || 'You',
+        full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'You',
+        avatar_url: user.user_metadata?.avatar_url
+      },
+      read_by: [],
+      read_count: 0
     }
 
-    // Clear typing indicator
-    await supabase
-      .from('typing_indicators')
-      .delete()
-      .eq('channel_id', selectedChannel.id)
-      .eq('user_id', user.id)
-      .then(() => {})
-      .catch(() => {})
+    setMessages(prev => [...prev, optimisticMessage])
+    setMessage('')
+    
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true })
+    }, 100)
 
-  } catch (error) {
-    // Remove optimistic message on failure
-    setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id))
-    setMessage(optimisticMessage.content) // Restore message
-    console.error('Error sending message:', error)
-    Alert.alert('Error', 'Failed to send message. Please try again.')
-  } finally {
-    setSending(false)
+    try {
+      setSending(true)
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert([
+          {
+            content: sanitizedContent,
+            channel_id: selectedChannel.id,
+            user_id: user.id
+          }
+        ])
+        .select(`
+          *,
+          profiles!fk_chat_messages_user_id (
+            id,
+            username,
+            full_name,
+            avatar_url
+          )
+        `)
+        .single()
+
+      if (error) throw error
+
+      if (data) {
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === optimisticMessage.id ? { ...data, read_by: [], read_count: 0 } : msg
+          )
+        )
+      }
+
+      // Clear typing indicator
+      await clearTypingIndicator()
+
+    } catch (error) {
+      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id))
+      setMessage(optimisticMessage.content)
+      console.error('Error sending message:', error)
+      Alert.alert('Error', 'Failed to send message. Please try again.')
+    } finally {
+      setSending(false)
+    }
   }
-}
 
   const deleteMessage = async (messageId: string) => {
     if (!user) return
@@ -666,7 +834,7 @@ const sendMessage = async () => {
         .from('chat_messages')
         .delete()
         .eq('id', messageId)
-        .eq('user_id', user.id) // Only delete own messages
+        .eq('user_id', user.id)
 
       if (error) throw error
 
@@ -736,20 +904,114 @@ const sendMessage = async () => {
     return channels.reduce((sum, channel) => sum + channel.unread_count, 0)
   }
 
-  // Render typing indicator
+  const getReadReceiptText = (message: Message) => {
+    if (!message.read_by || message.read_by.length === 0) {
+      return 'Sent'
+    }
+    
+    const readByOthers = message.read_by.filter(id => id !== user?.id)
+    
+    if (readByOthers.length === 0) {
+      return 'Sent'
+    } else if (readByOthers.length === 1) {
+      const reader = channelMembers.get(readByOthers[0])
+      return `Read by ${reader?.username || 'someone'}`
+    } else if (readByOthers.length === 2) {
+      const reader1 = channelMembers.get(readByOthers[0])
+      const reader2 = channelMembers.get(readByOthers[1])
+      return `Read by ${reader1?.username || 'someone'} and ${reader2?.username || 'someone'}`
+    } else {
+      return `Read by ${readByOthers.length} people`
+    }
+  }
+
+  // Render typing indicator with animation
   const renderTypingIndicator = () => {
-    if (typingUsers.size === 0) return null
+    if (typingUsers.length === 0) return null
+
+    const typingText = typingUsers.length === 1
+      ? `${typingUsers[0].full_name || typingUsers[0].username} is typing...`
+      : typingUsers.length === 2
+      ? `${typingUsers[0].full_name || typingUsers[0].username} and ${typingUsers[1].full_name || typingUsers[1].username} are typing...`
+      : `${typingUsers.length} people are typing...`
 
     return (
-      <View style={styles.typingIndicator}>
-        <View style={styles.typingDots}>
-          <View style={[styles.typingDot, styles.typingDot1]} />
-          <View style={[styles.typingDot, styles.typingDot2]} />
-          <View style={[styles.typingDot, styles.typingDot3]} />
+      <View style={styles.typingIndicatorContainer}>
+        <View style={styles.typingIndicator}>
+          <View style={styles.typingDots}>
+            <Animated.View 
+              style={[
+                styles.typingDot,
+                {
+                  opacity: dot1Anim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.3, 1]
+                  }),
+                  transform: [{
+                    translateY: dot1Anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -4]
+                    })
+                  }]
+                }
+              ]}
+            />
+            <Animated.View 
+              style={[
+                styles.typingDot,
+                {
+                  opacity: dot2Anim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.3, 1]
+                  }),
+                  transform: [{
+                    translateY: dot2Anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -4]
+                    })
+                  }]
+                }
+              ]}
+            />
+            <Animated.View 
+              style={[
+                styles.typingDot,
+                {
+                  opacity: dot3Anim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.3, 1]
+                  }),
+                  transform: [{
+                    translateY: dot3Anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -4]
+                    })
+                  }]
+                }
+              ]}
+            />
+          </View>
+          <Text style={styles.typingText}>{typingText}</Text>
         </View>
-        <Text style={styles.typingText}>
-          {typingUsers.size === 1 ? 'Someone is typing...' : `${typingUsers.size} people are typing...`}
+      </View>
+    )
+  }
+
+  // Render read receipts for own messages
+  const renderReadReceipt = (message: Message) => {
+    if (!isOwnMessage(message.user_id)) return null
+    if (message.id.startsWith('temp-')) return null
+
+    return (
+      <View style={styles.readReceiptContainer}>
+        <Text style={styles.readReceiptText}>
+          {getReadReceiptText(message)}
         </Text>
+        {message.read_count && message.read_count > 0 && (
+          <View style={styles.readReceiptIcon}>
+            <Text style={styles.readReceiptCheckmark}>✓✓</Text>
+          </View>
+        )}
       </View>
     )
   }
@@ -847,7 +1109,6 @@ const sendMessage = async () => {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          {/* Mobile Header */}
           <View style={styles.mobileHeader}>
             <TouchableOpacity 
               style={styles.channelButton}
@@ -918,12 +1179,15 @@ const sendMessage = async () => {
                           ]}>
                             {item.content}
                           </Text>
-                          <Text style={[
-                            styles.messageTime,
-                            isOwnMessage(item.user_id) && styles.ownMessageTime
-                          ]}>
-                            {formatTime(item.created_at)}
-                          </Text>
+                                            <View style={styles.messageFooter}>
+                            <Text style={[
+                              styles.messageTime,
+                              isOwnMessage(item.user_id) && styles.ownMessageTime
+                            ]}>
+                              {formatTime(item.created_at)}
+                            </Text>
+                            {isOwnMessage(item.user_id) && renderReadReceipt(item)}
+                          </View>
                         </View>
                       </View>
                     </View>
@@ -1116,9 +1380,15 @@ const sendMessage = async () => {
                           ]}>
                             {item.content}
                           </Text>
-                          <Text style={styles.messageTime}>
-                            {formatTime(item.created_at)}
-                          </Text>
+                          <View style={styles.messageFooter}>
+                            <Text style={[
+                              styles.messageTime,
+                              isOwnMessage(item.user_id) && styles.ownMessageTime
+                            ]}>
+                              {formatTime(item.created_at)}
+                            </Text>
+                            {isOwnMessage(item.user_id) && renderReadReceipt(item)}
+                          </View>
                         </View>
                       </View>
                     </View>
@@ -1384,256 +1654,278 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     flexGrow: 1,
   },
-messagesContainerMobile: {
-padding: 16,
-paddingBottom: 10,
-flexGrow: 1,
-},
-messageContainer: {
-marginBottom: 16,
-},
-ownMessageContainer: {
-alignItems: 'flex-end',
-},
-messageContent: {
-flexDirection: 'row',
-maxWidth: IS_MOBILE ? '85%' : '80%',
-},
-avatar: {
-width: 36,
-height: 36,
-borderRadius: 18,
-backgroundColor: '#6366F1',
-justifyContent: 'center',
-alignItems: 'center',
-marginRight: 12,
-alignSelf: 'flex-end',
-},
-avatarMobile: {
-width: 32,
-height: 32,
-borderRadius: 16,
-backgroundColor: '#6366F1',
-justifyContent: 'center',
-alignItems: 'center',
-marginRight: 8,
-alignSelf: 'flex-end',
-},
-avatarText: {
-color: 'white',
-fontSize: 12,
-fontWeight: '600',
-},
-messageBubble: {
-padding: 12,
-borderRadius: 18,
-flex: 1,
-},
-ownMessageBubble: {
-backgroundColor: '#6366F1',
-borderBottomRightRadius: 4,
-},
-otherMessageBubble: {
-backgroundColor: '#f1f5f9',
-borderBottomLeftRadius: 4,
-},
-userName: {
-fontSize: 13,
-fontWeight: '600',
-color: '#475569',
-marginBottom: 4,
-},
-messageText: {
-fontSize: 15,
-lineHeight: 20,
-marginBottom: 4,
-},
-ownMessageText: {
-color: 'white',
-},
-otherMessageText: {
-color: '#334155',
-},
-messageTime: {
-fontSize: 11,
-color: '#94a3b8',
-alignSelf: 'flex-end',
-},
-ownMessageTime: {
-color: 'rgba(255, 255, 255, 0.7)',
-},
+  messagesContainerMobile: {
+    padding: 16,
+    paddingBottom: 10,
+    flexGrow: 1,
+  },
+  messageContainer: {
+    marginBottom: 16,
+  },
+  ownMessageContainer: {
+    alignItems: 'flex-end',
+  },
+  messageContent: {
+    flexDirection: 'row',
+    maxWidth: IS_MOBILE ? '85%' : '80%',
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    alignSelf: 'flex-end',
+  },
+  avatarMobile: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    alignSelf: 'flex-end',
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  messageBubble: {
+    padding: 12,
+    borderRadius: 18,
+    flex: 1,
+  },
+  ownMessageBubble: {
+    backgroundColor: '#6366F1',
+    borderBottomRightRadius: 4,
+  },
+  otherMessageBubble: {
+    backgroundColor: '#f1f5f9',
+    borderBottomLeftRadius: 4,
+  },
+  userName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  messageText: {
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  ownMessageText: {
+    color: 'white',
+  },
+  otherMessageText: {
+    color: '#334155',
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  messageTime: {
+    fontSize: 11,
+    color: '#94a3b8',
+  },
+  ownMessageTime: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
 
-// Typing Indicator Styles
-typingIndicator: {
-flexDirection: 'row',
-alignItems: 'center',
-paddingVertical: 12,
-paddingHorizontal: 16,
-},
-typingDots: {
-flexDirection: 'row',
-alignItems: 'center',
-marginRight: 8,
-},
-typingDot: {
-width: 8,
-height: 8,
-borderRadius: 4,
-backgroundColor: '#94a3b8',
-marginHorizontal: 2,
-},
-typingDot1: {
-opacity: 0.4,
-},
-typingDot2: {
-opacity: 0.6,
-},
-typingDot3: {
-opacity: 0.8,
-},
-typingText: {
-fontSize: 13,
-color: '#64748b',
-fontStyle: 'italic',
-},
+  // Read Receipt Styles
+  readReceiptContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  readReceiptText: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontStyle: 'italic',
+  },
+  readReceiptIcon: {
+    marginLeft: 4,
+  },
+  readReceiptCheckmark: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
 
-inputContainer: {
-flexDirection: 'row',
-padding: 16,
-backgroundColor: 'white',
-borderTopWidth: 1,
-borderTopColor: '#f1f5f9',
-alignItems: 'flex-end',
-},
-inputContainerMobile: {
-flexDirection: 'row',
-padding: 12,
-paddingBottom: Platform.OS === 'ios' ? 12 : 12,
-backgroundColor: 'white',
-borderTopWidth: 1,
-borderTopColor: '#e2e8f0',
-alignItems: 'flex-end',
-},
-textInput: {
-flex: 1,
-borderWidth: 1,
-borderColor: '#e2e8f0',
-borderRadius: 24,
-paddingHorizontal: 16,
-paddingVertical: 12,
-marginRight: 12,
-maxHeight: 100,
-fontSize: 15,
-backgroundColor: '#f8fafc',
-},
-textInputMobile: {
-flex: 1,
-borderWidth: 1,
-borderColor: '#e2e8f0',
-borderRadius: 20,
-paddingHorizontal: 16,
-paddingVertical: 10,
-marginRight: 8,
-maxHeight: 100,
-fontSize: 15,
-backgroundColor: '#f8fafc',
-},
-sendButton: {
-backgroundColor: '#6366F1',
-paddingHorizontal: 20,
-paddingVertical: 12,
-borderRadius: 24,
-justifyContent: 'center',
-alignItems: 'center',
-minWidth: 60,
-},
-sendButtonMobile: {
-backgroundColor: '#6366F1',
-width: 44,
-height: 44,
-borderRadius: 22,
-justifyContent: 'center',
-alignItems: 'center',
-},
-sendButtonDisabled: {
-backgroundColor: '#cbd5e1',
-},
-sendButtonText: {
-color: 'white',
-fontSize: 15,
-fontWeight: '600',
-},
-loadingContainer: {
-flex: 1,
-justifyContent: 'center',
-alignItems: 'center',
-backgroundColor: 'white',
-},
-loadingText: {
-marginTop: 12,
-fontSize: 16,
-color: '#64748b',
-},
-emptyChannels: {
-padding: 20,
-alignItems: 'center',
-},
-emptyText: {
-color: '#94a3b8',
-fontSize: 14,
-},
-emptyMessages: {
-flex: 1,
-justifyContent: 'center',
-alignItems: 'center',
-padding: 40,
-},
-emptyMessageEmoji: {
-fontSize: 48,
-marginBottom: 16,
-},
-emptyMessageText: {
-fontSize: 16,
-color: '#64748b',
-marginBottom: 8,
-fontWeight: '600',
-},
-emptyMessageSubtext: {
-fontSize: 14,
-color: '#94a3b8',
-textAlign: 'center',
-},
-noChannelSelected: {
-flex: 1,
-justifyContent: 'center',
-alignItems: 'center',
-backgroundColor: '#f8fafc',
-padding: 20,
-},
-noChannelEmoji: {
-fontSize: 64,
-marginBottom: 16,
-},
-noChannelText: {
-fontSize: 16,
-color: '#64748b',
-marginBottom: 16,
-fontWeight: '500',
-},
-selectChannelButton: {
-backgroundColor: '#6366F1',
-paddingHorizontal: 24,
-paddingVertical: 12,
-borderRadius: 12,
-},
-selectChannelButtonText: {
-color: 'white',
-fontSize: 16,
-fontWeight: '600',
-},
-errorText: {
-fontSize: 16,
-color: '#EF4444',
-textAlign: 'center',
-},
+  // Typing Indicator Styles
+  typingIndicatorContainer: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  typingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    alignSelf: 'flex-start',
+  },
+  typingDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94a3b8',
+    marginHorizontal: 2,
+  },
+  typingText: {
+    fontSize: 13,
+    color: '#64748b',
+    fontStyle: 'italic',
+  },
+
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    alignItems: 'flex-end',
+  },
+  inputContainerMobile: {
+    flexDirection: 'row',
+    padding: 12,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 12,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    alignItems: 'flex-end',
+  },
+  textInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginRight: 12,
+    maxHeight: 100,
+    fontSize: 15,
+    backgroundColor: '#f8fafc',
+  },
+  textInputMobile: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginRight: 8,
+    maxHeight: 100,
+    fontSize: 15,
+    backgroundColor: '#f8fafc',
+  },
+  sendButton: {
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 60,
+  },
+  sendButtonMobile: {
+    backgroundColor: '#6366F1',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#cbd5e1',
+  },
+  sendButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#64748b',
+  },
+  emptyChannels: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#94a3b8',
+    fontSize: 14,
+  },
+  emptyMessages: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyMessageEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyMessageText: {
+    fontSize: 16,
+    color: '#64748b',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  emptyMessageSubtext: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+  },
+  noChannelSelected: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 20,
+  },
+  noChannelEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  noChannelText: {
+    fontSize: 16,
+    color: '#64748b',
+    marginBottom: 16,
+    fontWeight: '500',
+  },
+  selectChannelButton: {
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  selectChannelButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#EF4444',
+    textAlign: 'center',
+  },
 })
