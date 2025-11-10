@@ -4,6 +4,7 @@ import { FlatList, View, Text, StyleSheet, RefreshControl } from 'react-native'
 import { Message } from '../../types/chat'
 import { MessageBubble } from './MessageBubble'
 import { IS_MOBILE } from '../../constants/chat'
+import { shouldShowDateHeader, formatDateHeader } from '../../utils/chatHelpers'
 
 interface MessageListProps {
   messages: Message[]
@@ -38,6 +39,30 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   const isOwnMessage = (messageUserId: string) => messageUserId === currentUserId
 
+  const renderItem = ({ item, index }: { item: Message; index: number }) => {
+    const previousMessage = index > 0 ? messages[index - 1] : null
+    const showDateHeader = shouldShowDateHeader(item, previousMessage)
+
+    return (
+      <View>
+        {showDateHeader && (
+          <View style={styles.dateHeader}>
+            <Text style={styles.dateHeaderText}>
+              {formatDateHeader(item.created_at)}
+            </Text>
+          </View>
+        )}
+        <MessageBubble
+          message={item}
+          isOwn={isOwnMessage(item.user_id)}
+          onLongPress={() => onDeleteMessage(item.id, isOwnMessage(item.user_id))}
+          readReceiptText={getReadReceiptText(item)}
+          showReadReceipt={!item.id.startsWith('temp-')}
+        />
+      </View>
+    )
+  }
+
   return (
     <FlatList
       ref={flatListRef}
@@ -53,15 +78,7 @@ export const MessageList: React.FC<MessageListProps> = ({
           tintColor="#6366F1"
         />
       }
-      renderItem={({ item }) => (
-        <MessageBubble
-          message={item}
-          isOwn={isOwnMessage(item.user_id)}
-          onLongPress={() => onDeleteMessage(item.id, isOwnMessage(item.user_id))}
-          readReceiptText={getReadReceiptText(item)}
-          showReadReceipt={!item.id.startsWith('temp-')}
-        />
-      )}
+      renderItem={renderItem}
       ListEmptyComponent={
         <View style={styles.emptyMessages}>
           <Text style={styles.emptyMessageEmoji}>💬</Text>
@@ -88,6 +105,19 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 10,
     flexGrow: 1,
+  },
+  dateHeader: {
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dateHeaderText: {
+    fontSize: 12,
+    color: '#64748b',
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   emptyMessages: {
     flex: 1,

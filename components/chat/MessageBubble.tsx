@@ -2,7 +2,7 @@
 import React from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { Message } from '../../types/chat'
-import { formatTime, getUserInitials } from '../../utils/chatHelpers'
+import { formatMessageTimestamp, getUserInitials } from '../../utils/chatHelpers'
 import { IS_MOBILE } from '../../constants/chat'
 
 interface MessageBubbleProps {
@@ -48,7 +48,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </Text>
             <View style={styles.messageFooter}>
               <Text style={[styles.messageTime, isOwn && styles.ownMessageTime]}>
-                {formatTime(message.created_at)}
+                {formatMessageTimestamp(message.created_at)}
               </Text>
               {isOwn && showReadReceipt && readReceiptText && (
                 <View style={styles.readReceiptContainer}>
@@ -68,7 +68,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
 const styles = StyleSheet.create({
   messageContainer: {
-    marginBottom: 16,
+    marginBottom: 8, // Reduced from 16 to make date headers more prominent
   },
   ownMessageContainer: {
     alignItems: 'flex-end',
@@ -158,6 +158,6 @@ const styles = StyleSheet.create({
   readReceiptCheckmark: {
     fontSize: 10,
     color: 'rgba(255, 255, 255, 0.8)',
-        marginLeft: 4,
+    marginLeft: 4,
   },
 })

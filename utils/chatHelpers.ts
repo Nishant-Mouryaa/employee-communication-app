@@ -4,6 +4,82 @@ export const formatTime = (timestamp: string): string => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+export const formatMessageTimestamp = (timestamp: string): string => {
+  const messageDate = new Date(timestamp)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const messageDay = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate())
+
+  // If message is from today, show only time
+  if (messageDay.getTime() === today.getTime()) {
+    return formatTime(timestamp)
+  }
+
+  // If message is from yesterday, show "Yesterday"
+  if (messageDay.getTime() === yesterday.getTime()) {
+    return 'Yesterday'
+  }
+
+  // If message is from this week (last 6 days), show day name
+  const daysDiff = Math.floor((today.getTime() - messageDay.getTime()) / (1000 * 60 * 60 * 24))
+  if (daysDiff <= 6) {
+    return messageDate.toLocaleDateString([], { weekday: 'short' })
+  }
+
+  // If message is older than a week, show full date
+  return messageDate.toLocaleDateString([], { 
+    day: 'numeric', 
+    month: 'short',
+    year: messageDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+  })
+}
+
+export const shouldShowDateHeader = (currentMessage: Message, previousMessage: Message | null): boolean => {
+  if (!previousMessage) return true
+
+  const currentDate = new Date(currentMessage.created_at)
+  const previousDate = new Date(previousMessage.created_at)
+  
+  const currentDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+  const previousDay = new Date(previousDate.getFullYear(), previousDate.getMonth(), previousDate.getDate())
+
+  return currentDay.getTime() !== previousDay.getTime()
+}
+
+export const formatDateHeader = (timestamp: string): string => {
+  const messageDate = new Date(timestamp)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const messageDay = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate())
+
+  // Today
+  if (messageDay.getTime() === today.getTime()) {
+    return 'Today'
+  }
+
+  // Yesterday
+  if (messageDay.getTime() === yesterday.getTime()) {
+    return 'Yesterday'
+  }
+
+  // This week (last 6 days)
+  const daysDiff = Math.floor((today.getTime() - messageDay.getTime()) / (1000 * 60 * 60 * 24))
+  if (daysDiff <= 6) {
+    return messageDate.toLocaleDateString([], { weekday: 'long' })
+  }
+
+  // Older than a week
+  return messageDate.toLocaleDateString([], { 
+    day: 'numeric', 
+    month: 'long',
+    year: messageDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+  })
+}
+
 export const getUserInitials = (name: string): string => {
   if (!name) return '??'
   return name
