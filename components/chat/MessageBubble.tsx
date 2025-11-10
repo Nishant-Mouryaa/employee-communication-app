@@ -15,13 +15,14 @@ interface MessageBubbleProps {
   onLongPress: () => void
   onReaction: (messageId: string, emoji: string) => void
   onDelete?: (messageId: string) => void
-  onEdit?: (messageId: string, content: string) => void
+  onEdit?: () => void // Changed - now just triggers edit mode
   onReply?: (message: Message) => void
   onReplyPress?: (messageId: string) => void
   readReceiptText?: string
   showReadReceipt?: boolean
   currentUserId?: string
 }
+
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
@@ -66,11 +67,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
   }
 
-  const handleEdit = () => {
-    if (onEdit) {
-      onEdit(message.id, message.content)
-    }
+ const handleEdit = () => {
+  if (onEdit) {
+    onEdit() // Just call it, parent will handle the message
   }
+}
 
   const handleReply = () => {
     if (onReply) {
@@ -151,18 +152,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </Text>
                 
                 <View style={styles.messageFooter}>
-                  <Text style={[styles.messageTime, isOwn && styles.ownMessageTime]}>
-                    {formatMessageTimestamp(message.created_at)}
-                  </Text>
-                  
-                  {readStatus && (
-                    <View style={styles.readStatusContainer}>
-                      <Text style={[styles.readStatusIcon, { color: readStatus.color }]}>
-                        {readStatus.icon}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+  <Text style={[styles.messageTime, isOwn && styles.ownMessageTime]}>
+    {formatMessageTimestamp(message.created_at)}
+    {message.is_edited && (
+      <Text style={styles.editedIndicator}> (edited)</Text>
+    )}
+  </Text>
+  
+  {readStatus && (
+    <View style={styles.readStatusContainer}>
+      <Text style={[styles.readStatusIcon, { color: readStatus.color }]}>
+        {readStatus.icon}
+      </Text>
+    </View>
+  )}
+</View>
                 
                 {isOwn && showReadReceipt && readReceiptText && (message.read_count ?? 0) > 0 && (
                   <Text style={styles.readReceiptDetail}>{readReceiptText}</Text>
@@ -374,5 +378,10 @@ const styles = StyleSheet.create({
   reactionsContainerOwn: {
     left: 'auto',
     right: 12,
+  },
+   editedIndicator: {
+    fontSize: 10,
+    fontStyle: 'italic',
+    opacity: 0.7,
   },
 })

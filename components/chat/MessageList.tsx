@@ -49,11 +49,11 @@ export const MessageList: React.FC<MessageListProps> = ({
     onDeleteMessage(messageId, true)
   }
 
-  const handleEdit = (messageId: string, content: string) => {
-    if (onEditMessage) {
-      onEditMessage(messageId, content)
-    }
+const handleEdit = (message: Message) => {
+  if (onEditMessage) {
+    onEditMessage(message) // Pass the full message
   }
+}
 
   const scrollToMessage = (messageId: string) => {
     const index = messages.findIndex(m => m.id === messageId)
@@ -76,18 +76,18 @@ export const MessageList: React.FC<MessageListProps> = ({
           </View>
         )}
         <MessageBubble
-          message={item}
-          isOwn={isOwnMessage(item.user_id)}
-          onLongPress={() => onDeleteMessage(item.id, isOwnMessage(item.user_id))}
-          onReaction={onReaction}
-          onDelete={handleDelete}
-          onEdit={handleEdit}
-          onReply={onReply}
-          onReplyPress={scrollToMessage}
-          readReceiptText={getReadReceiptText(item)}
-          showReadReceipt={!item.id.startsWith('temp-')}
-          currentUserId={currentUserId}
-        />
+  message={item}
+  isOwn={isOwnMessage(item.user_id)}
+  onLongPress={() => onDeleteMessage(item.id, isOwnMessage(item.user_id))}
+  onReaction={onReaction}
+  onDelete={handleDelete}
+  onEdit={() => handleEdit(item)} // Pass the full message
+  onReply={onReply}
+  onReplyPress={scrollToMessage}
+  readReceiptText={getReadReceiptText(item)}
+  showReadReceipt={!item.id.startsWith('temp-')}
+  currentUserId={currentUserId}
+/>
       </View>
     )
   }

@@ -11,6 +11,7 @@ import {
 import { fetchMessages, sendMessage as sendMessageAPI, deleteMessage as deleteMessageAPI } from '../services/messageService'
 import { markMessagesAsRead } from '../services/readReceiptService'
 import { sanitizeMessage } from '../utils/chatHelpers'
+import { updateMessage as updateMessageAPI } from '../services/messageService'
 
 export const useChatData = (userId: string | undefined) => {
   const [state, setState] = useState<ChatState>({
@@ -256,6 +257,27 @@ export const useChatData = (userId: string | undefined) => {
     }))
   }, [])
 
+  const editMessage = useCallback(async (messageId: string, newContent: string) => {
+  if (!userId) return
+
+  try {
+    const updatedMessage = await updateMessageAPI(messageId, newContent, userId)
+    
+    setState(prev => ({
+      ...prev,
+      messages: prev.messages.map(msg =>
+        msg.id === messageId ? updatedMessage : msg
+      )
+    }))
+
+    return updatedMessage
+  } catch (error) {
+    console.error('Error editing message:', error)
+    Alert.alert('Error', 'Failed to edit message')
+    throw error
+  }
+}, [userId])
+
   return {
     ...state,
     loadChannels,
@@ -271,5 +293,6 @@ export const useChatData = (userId: string | undefined) => {
     setTypingUsers,
     updateChannelUnreadCount,
     refresh,
+    editMessage
   }
 }

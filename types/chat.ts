@@ -37,6 +37,8 @@ export interface Message {
   reactions?: Reaction[]
   reply_to?: string
   reply_message?: Message
+  edited_at?: string
+  is_edited?: boolean
 }
 
 export interface TypingUser {

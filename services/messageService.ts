@@ -83,8 +83,6 @@ export const fetchMessages = async (channelId: string) => {
   return messagesWithReactionsAndReads
 }
 
-// services/messageService.ts - Update sendMessage function
-
 export const sendMessage = async (
   content: string,
   channelId: string,
@@ -154,4 +152,86 @@ export const deleteMessage = async (messageId: string, userId: string): Promise<
     .eq('user_id', userId)
 
   if (error) throw error
+}
+
+
+
+
+export const updateMessage = async (
+  messageId: string,
+  newContent: string,
+  userId: string
+): Promise<Message> => {
+  // First verify the user owns this message
+  const { data: existingMessage, error: fetchError } = await supabase
+    .from('chat_messages')
+    .select('user_id')
+    .eq('id', messageId)
+    .single()
+
+  if (fetchError) throw fetchError
+  if (existingMessage.user_id !== userId) {
+    throw new Error('Unauthorized: You can only edit your own messages')
+  }
+
+  // Update the message
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .update({
+      content: newContent,
+      edited_at: new Date().toISOString(),
+      is_edited: true,
+    })
+    .eq('id', messageId)
+    .select(`
+      *,
+      profiles!fk_chat_messages_user_id (
+        id,
+        username,
+        full_name,
+        avatar_url
+      )
+    `)
+    .single()
+
+  if (error) throw error
+
+  // Fetch reply message if exists
+  let replyMessage = null
+  if (data.reply_to) {
+    const { data: replyData } = await supabase
+      .from('chat_messages')
+      .select(`
+        *,
+        profiles!fk_chat_messages_user_id (
+          id,
+          username,
+          full_name,
+          avatar_url
+        )
+      `)
+      .eq('id', data.reply_to)
+      .single()
+    
+    replyMessage = replyData
+  }
+
+  // Fetch reactions
+  const reactions = await getMessageReactions(messageId)
+
+  // Fetch read receipts
+  const { data: reads } = await supabase
+    .from('chat_message_reads')
+    .select('user_id')
+    .eq('message_id', messageId)
+
+  const readBy = reads?.map(r => r.user_id) || []
+
+  return {
+    ...data,
+    reactions: reactions || [],
+    read_by: readBy,
+    read_count: readBy.length,
+    reply_message: replyMessage,
+  }
 }

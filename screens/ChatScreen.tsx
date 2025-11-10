@@ -6,8 +6,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../hooks/useAuth'
 import { useChatData } from '../hooks/useChatData'
 import { useRealtimeChat } from '../hooks/useRealtimeChat'
@@ -17,7 +17,7 @@ import { markMessageAsRead, getReadReceiptText } from '../services/readReceiptSe
 import { addReaction, removeReaction } from '../services/reactionService'
 import { fetchChannelMembersList } from '../services/channelService'
 import { IS_MOBILE } from '../constants/chat'
-import { Channel, ChannelMember } from '../types/chat'
+import { Channel, ChannelMember, Message } from '../types/chat'
 import {
   ChatHeader,
   ChannelList,
@@ -29,6 +29,7 @@ import {
   ChatAreaHeader,
   LoadingState,
   MembersList,
+  EditMessageModal,
 } from '../components/chat'
 
 export default function ChatScreen() {
@@ -40,12 +41,14 @@ export default function ChatScreen() {
   const [showMembersList, setShowMembersList] = useState(false)
   const [hasUserChecked, setHasUserChecked] = useState(false)
   const [channelMembersList, setChannelMembersList] = useState<ChannelMember[]>([])
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
+
+ 
   const handleReply = useCallback((message: Message) => {
   setReplyingTo(message)
 }, [])
 
-  // All hooks must be called unconditionally and in the same order every render
   const {
     channels,
     selectedChannel,
@@ -62,11 +65,12 @@ export default function ChatScreen() {
     deleteMessage,
     updateMessage,
     addMessage,
-    updateChannelUnreadCount,
+    editMessage,
     refresh,
     addReactionToMessage,
     removeReactionFromMessage,
   } = useChatData(user?.id)
+  
 
   const { typingUsers, handleTyping, handleStopTyping } = useTypingIndicator({
     channelId: selectedChannel?.id,
@@ -168,6 +172,19 @@ export default function ChatScreen() {
     }
   }, [selectedChannel?.id, user?.id, loadMessages, loadChannelMembers])
 
+   const handleEditMessage = useCallback((message: Message) => {
+  setEditingMessage(message)
+}, [])
+
+  const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
+  try {
+    await editMessage(messageId, newContent)
+    setEditingMessage(null)
+  } catch (error) {
+    console.error('Error saving edit:', error)
+    Alert.alert('Error', 'Failed to save changes')
+  }
+}, [editMessage])
   // All useCallback hooks must be declared unconditionally
   const handleChannelSelect = useCallback((channel: Channel) => {
     selectChannel(channel)
@@ -242,6 +259,10 @@ const handleCancelReply = useCallback(() => {
     setShowMembersList(true)
   }, [])
 
+  const handleCloseEdit = useCallback(() => {
+  setEditingMessage(null)
+}, [])
+
   const handleCloseMembers = useCallback(() => {
     setShowMembersList(false)
   }, [])
@@ -292,7 +313,7 @@ const handleCancelReply = useCallback(() => {
             />
           ) : selectedChannel ? (
             <>
-              <MessageList
+ <MessageList
   messages={messages}
   currentUserId={user.id}
   channelMembers={channelMembers}
@@ -300,6 +321,7 @@ const handleCancelReply = useCallback(() => {
   refreshing={refreshing}
   onRefresh={refresh}
   onDeleteMessage={handleDeleteMessage}
+  onEditMessage={handleEditMessage} // Pass the handler
   onReaction={handleReaction}
   onReply={handleReply}
   getReadReceiptText={getMessageReadReceiptText}
@@ -328,6 +350,12 @@ const handleCancelReply = useCallback(() => {
             onClose={() => setShowChannelModal(false)}
             onSelectChannel={handleChannelSelect}
           />
+          <EditMessageModal
+  visible={!!editingMessage}
+  message={editingMessage}
+  onClose={handleCloseEdit}
+  onSave={handleSaveEdit}
+/>
         </KeyboardAvoidingView>
       </SafeAreaView>
     )
@@ -360,9 +388,9 @@ const handleCancelReply = useCallback(() => {
         <View style={styles.chatArea}>
           {selectedChannel ? (
             <>
-              <ChatAreaHeader
+              <ChatAreaHeader   
                 channelName={selectedChannel.name}
-                channelDescription={selectedChannel.description}
+                onBack={() => selectChannel(null)}
                 onMembersPress={handleMembersPress}
                 memberCount={channelMembersList.length}
               />
