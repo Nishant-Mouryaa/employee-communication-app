@@ -1,143 +1,230 @@
 // components/chat/ChannelList.tsx
 import React from 'react'
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { Channel } from '../../types/chat'
+import { getUserInitials } from '../../utils/chatHelpers'
 
-interface ChannelListProps {
+
+const ChannelItem = ({ 
+  channel, 
+  isSelected, 
+  onSelect 
+}: { 
+  channel: Channel
+  isSelected: boolean
+  onSelect: () => void 
+}) => {
+  const isDM = channel.type === 'direct'
+  const displayName = isDM && channel.dm_user 
+    ? channel.dm_user.full_name || channel.dm_user.username
+    : channel.name
+
+  return (
+    <TouchableOpacity
+      style={[styles.channelItem, isSelected && styles.selectedChannel]}
+      onPress={onSelect}
+      activeOpacity={0.7}
+    >
+      <View style={styles.channelContent}>
+        <View style={styles.channelIcon}>
+          {isDM ? (
+            // Show avatar or initials for DM
+            channel.dm_user?.avatar_url ? (
+              <Image 
+                source={{ uri: channel.dm_user.avatar_url }} 
+                style={styles.dmAvatar}
+              />
+            ) : (
+              <View style={styles.dmAvatarFallback}>
+                <Text style={styles.dmInitials}>
+                  {getUserInitials(displayName)}
+                </Text>
+              </View>
+            )
+          ) : (
+            // Show hash for regular channels
+            <Text style={styles.hashIcon}>#</Text>
+          )}
+        </View>
+        
+        <View style={styles.channelInfo}>
+          <Text style={[styles.channelName, isSelected && styles.selectedText]}>
+            {displayName}
+          </Text>
+         // components/chat/ChannelList.tsx (continued)
+          {isDM && channel.dm_user?.is_online && (
+            <View style={styles.onlineIndicator} />
+          )}
+        </View>
+        
+        {channel.unread_count > 0 && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadCount}>{channel.unread_count}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  )
+}
+
+// components/chat/ChannelList.tsx
+export const ChannelList: React.FC<{
   channels: Channel[]
   selectedChannelId?: string
   onChannelSelect: (channel: Channel) => void
-  refreshing: boolean
-  onRefresh: () => void
-}
+  refreshing?: boolean
+  onRefresh?: () => void
+}> = ({ channels, selectedChannelId, onChannelSelect, refreshing, onRefresh }) => {
+  // Remove duplicates based on channel ID
+  const uniqueChannels = React.useMemo(() => {
+    const seen = new Set()
+    return channels.filter(channel => {
+      if (seen.has(channel.id)) {
+        return false
+      }
+      seen.add(channel.id)
+      return true
+    })
+  }, [channels])
 
-export const ChannelList: React.FC<ChannelListProps> = ({
-  channels,
-  selectedChannelId,
-  onChannelSelect,
-  refreshing,
-  onRefresh
-}) => {
+  // Separate channels and DMs
+  const regularChannels = uniqueChannels.filter(c => c.type !== 'direct')
+  const directMessages = uniqueChannels.filter(c => c.type === 'direct')
+
   return (
-    <View style={styles.sidebar}>
-      <Text style={styles.sidebarTitle}>CHANNELS</Text>
+    <View style={styles.container}>
       <FlatList
-        data={channels}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
+        data={[
+          { type: 'section', title: 'Channels', key: 'section-channels' },
+          ...regularChannels.map(c => ({ ...c, type: 'channel', key: c.id })),
+          { type: 'section', title: 'Direct Messages', key: 'section-dms' },
+          ...directMessages.map(c => ({ ...c, type: 'dm', key: c.id }))
+        ]}
+        renderItem={({ item }) => {
+          if (item.type === 'section') {
+            return (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{item.title}</Text>
+              </View>
+            )
+          }
+          return (
+            <ChannelItem
+              channel={item}
+              isSelected={item.id === selectedChannelId}
+              onSelect={() => onChannelSelect(item)}
+            />
+          )
+        }}
+        keyExtractor={(item) => item.key || item.id || item.title}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
+          <RefreshControl
+            refreshing={refreshing || false}
             onRefresh={onRefresh}
-            tintColor="#6366F1"
           />
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.channelItem,
-              selectedChannelId === item.id && styles.selectedChannel
-            ]}
-            onPress={() => onChannelSelect(item)}
-          >
-            <View style={styles.channelInfo}>
-              <Text style={[
-                styles.channelHash,
-                selectedChannelId === item.id && styles.selectedChannelText
-              ]}>#</Text>
-              <Text style={[
-                styles.channelName,
-                selectedChannelId === item.id && styles.selectedChannelText
-              ]}>
-                {item.name}
-              </Text>
-            </View>
-            {item.unread_count > 0 && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>
-                  {item.unread_count > 99 ? '99+' : item.unread_count}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          <View style={styles.emptyChannels}>
-            <Text style={styles.emptyText}>No channels available</Text>
-          </View>
-        }
+        showsVerticalScrollIndicator={false}
       />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  sidebar: {
-    width: 280,
+  container: {
+    flex: 1,
     backgroundColor: '#f8fafc',
-    borderRightWidth: 1,
-    borderRightColor: '#e2e8f0',
-    padding: 16,
+    paddingTop: 12,
   },
-  sidebarTitle: {
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  sectionTitle: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#64748b',
-    marginBottom: 16,
-    letterSpacing: 1,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   channelItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 8,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginHorizontal: 8,
+    marginBottom: 2,
   },
   selectedChannel: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#e0e7ff',
   },
-  channelInfo: {
+  channelContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
   },
-  channelHash: {
-    fontSize: 16,
-    fontWeight: '600',
+  channelIcon: {
+    width: 32,
+    height: 32,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  hashIcon: {
+    fontSize: 18,
     color: '#64748b',
-    marginRight: 8,
+    fontWeight: '600',
+  },
+  dmAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  dmAvatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dmInitials: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  channelInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   channelName: {
     fontSize: 15,
-    fontWeight: '500',
     color: '#334155',
-    flex: 1,
+    fontWeight: '500',
   },
-  selectedChannelText: {
-    color: 'white',
+  selectedText: {
+    color: '#4f46e5',
+    fontWeight: '600',
+  },
+  onlineIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+    marginLeft: 6,
   },
   unreadBadge: {
-    backgroundColor: '#EF4444',
-    borderRadius: 12,
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
     minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 6,
   },
-  unreadText: {
+  unreadCount: {
     color: 'white',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  emptyChannels: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: '#94a3b8',
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '600',
   },
 })

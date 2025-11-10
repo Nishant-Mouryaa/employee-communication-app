@@ -1,21 +1,84 @@
 // components/chat/ChatAreaHeader.tsx
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { getUserInitials } from '../../utils/chatHelpers'
 
 interface ChatAreaHeaderProps {
   channelName: string
   channelDescription?: string
   memberCount?: number
   onInfoPress?: () => void
+  isDM?: boolean
+  dmUser?: {
+    full_name: string
+    username: string
+    avatar_url?: string
+    is_online?: boolean
+    last_seen?: string
+  }
 }
 
 export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
   channelName,
   channelDescription,
   memberCount = 0,
-  onInfoPress
+  onInfoPress,
+  isDM = false,
+  dmUser
 }) => {
+  const formatLastSeen = (lastSeen?: string, isOnline?: boolean) => {
+    if (isOnline) return 'Active now'
+    if (!lastSeen) return 'Offline'
+    
+    const date = new Date(lastSeen)
+    const now = new Date()
+    const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
+    
+    if (diffHours < 1) return 'Active recently'
+    if (diffHours < 24) return `Active ${diffHours}h ago`
+    return `Active ${date.toLocaleDateString()}`
+  }
+
+  if (isDM && dmUser) {
+    return (
+      <View style={styles.chatHeader}>
+        <View style={styles.dmHeader}>
+          <View style={styles.dmUserInfo}>
+            {dmUser.avatar_url ? (
+              <Image source={{ uri: dmUser.avatar_url }} style={styles.dmAvatar} />
+            ) : (
+              <View style={styles.dmAvatarFallback}>
+                <Text style={styles.dmInitials}>
+                  {getUserInitials(dmUser.full_name || dmUser.username)}
+                </Text>
+              </View>
+            )}
+            
+            <View style={styles.dmTextInfo}>
+              <View style={styles.dmNameRow}>
+                <Text style={styles.dmName}>
+                  {dmUser.full_name || dmUser.username}
+                </Text>
+                {dmUser.is_online && <View style={styles.onlineIndicator} />}
+              </View>
+              <Text style={styles.dmStatus}>
+                {formatLastSeen(dmUser.last_seen, dmUser.is_online)}
+              </Text>
+            </View>
+          </View>
+          
+          {onInfoPress && (
+            <TouchableOpacity style={styles.infoButton} onPress={onInfoPress}>
+              <Ionicons name="information-circle-outline" size={20} color="#64748b" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    )
+  }
+
+  // Original channel header
   return (
     <View style={styles.chatHeader}>
       <View style={styles.channelHeader}>
@@ -31,10 +94,7 @@ export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
             )}
             
             {onInfoPress && (
-              <TouchableOpacity 
-                style={styles.infoButton}
-                onPress={onInfoPress}
-              >
+              <TouchableOpacity style={styles.infoButton} onPress={onInfoPress}>
                 <Ionicons name="information-circle-outline" size={20} color="#64748b" />
               </TouchableOpacity>
             )}
@@ -56,10 +116,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e2e8f0',
     backgroundColor: 'white',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
@@ -80,6 +137,60 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
     letterSpacing: -0.5,
+  },
+  dmHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dmUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  dmAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+  },
+  dmAvatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  dmInitials: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  dmTextInfo: {
+    flex: 1,
+  },
+  dmNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  dmName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  onlineIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+    marginLeft: 8,
+  },
+  dmStatus: {
+    fontSize: 14,
+    color: '#64748b',
   },
   headerActions: {
     flexDirection: 'row',

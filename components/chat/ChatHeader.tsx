@@ -1,16 +1,23 @@
 // components/chat/ChatHeader.tsx
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native'
-import { IS_MOBILE } from '../../constants/chat'
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { IS_MOBILE } from '../../constants/chat'
+import { getUserInitials } from '../../utils/chatHelpers'
 
 interface ChatHeaderProps {
   channelName?: string
   unreadCount: number
   onChannelPress: () => void
-  onMembersPress: () => void
+  onMembersPress?: () => void
   memberCount?: number
-  isOnline?: boolean
+  isDM?: boolean
+  dmUser?: {
+    full_name: string
+    username: string
+    avatar_url?: string
+    is_online?: boolean
+  }
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -18,249 +25,185 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   unreadCount,
   onChannelPress,
   onMembersPress,
-  memberCount = 0,
-  isOnline = true
+  memberCount,
+  isDM = false,
+  dmUser
 }) => {
-  if (IS_MOBILE) {
-    return (
-      <View style={styles.mobileHeader}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity 
-            style={styles.channelButton} 
-            onPress={onChannelPress}
-            activeOpacity={0.7}
-          >
-            <View style={styles.channelInfo}>
-              <Text style={styles.channelButtonHash}>#</Text>
-              <View style={styles.channelTextContainer}>
-                <Text style={styles.channelButtonText} numberOfLines={1}>
-                  {channelName || 'Select Channel'}
-                </Text>
-                {channelName && (
-                  <View style={styles.statusContainer}>
-                    <View style={[styles.statusDot, isOnline ? styles.online : styles.offline]} />
-                    <Text style={styles.statusText}>
-                      {isOnline ? 'Online' : 'Offline'}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-            
-            {unreadCount > 0 && (
-              <View style={styles.headerUnreadBadge}>
-                <Text style={styles.unreadText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
+  const displayName = isDM && dmUser 
+    ? dmUser.full_name || dmUser.username 
+    : channelName || 'Select a channel'
+
+  return (
+    <View style={styles.container}>
+      <TouchableOpacity 
+        style={styles.channelButton}
+        onPress={onChannelPress}
+        activeOpacity={0.7}
+      >
+        {isDM && dmUser ? (
+          // DM Header
+          <View style={styles.dmHeader}>
+            {dmUser.avatar_url ? (
+              <Image source={{ uri: dmUser.avatar_url }} style={styles.dmAvatar} />
+            ) : (
+              <View style={styles.dmAvatarFallback}>
+                <Text style={styles.dmInitials}>
+                  {getUserInitials(dmUser.full_name || dmUser.username)}
                 </Text>
               </View>
             )}
-            
-            <Ionicons name="chevron-down" size={16} color="rgba(255,255,255,0.7)" />
-          </TouchableOpacity>
-        </View>
-        
-        <TouchableOpacity 
-          style={styles.membersButton} 
-          onPress={onMembersPress}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="people-outline" size={20} color="white" />
-          {memberCount > 0 && (
-            <View style={styles.memberCountBadge}>
-              <Text style={styles.memberCountText}>{memberCount}</Text>
+            <View style={styles.dmInfo}>
+              <Text style={styles.channelName} numberOfLines={1}>
+                {displayName}
+              </Text>
+              {dmUser.is_online && (
+                <View style={styles.onlineStatusRow}>
+                  <View style={styles.onlineIndicator} />
+                  <Text style={styles.onlineText}>Active now</Text>
+                </View>
+              )}
             </View>
-          )}
-        </TouchableOpacity>
-      </View>
-    )
-  }
-
-  return (
-    <View style={styles.header}>
-      <View style={styles.desktopHeaderContent}>
-        <View>
-          <Text style={styles.headerTitle}>Messages</Text>
-          <Text style={styles.headerSubtitle}>Team communication</Text>
-        </View>
-        
-        <View style={styles.desktopStats}>
-          <View style={styles.statItem}>
-            <Ionicons name="chatbubbles-outline" size={16} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.statText}>Active</Text>
           </View>
-          
+        ) : (
+          // Regular Channel Header
+          <>
+            <Text style={styles.hashIcon}>#</Text>
+            <Text style={styles.channelName} numberOfLines={1}>
+              {displayName}
+            </Text>
+          </>
+        )}
+        
+        {!isDM && IS_MOBILE && (
+          <Ionicons name="chevron-down" size={20} color="#64748b" />
+        )}
+      </TouchableOpacity>
+
+      <View style={styles.actions}>
+        {onMembersPress && !isDM && memberCount !== undefined && (
           <TouchableOpacity 
-            style={styles.desktopMembersButton}
+            style={styles.actionButton}
             onPress={onMembersPress}
           >
-            <Ionicons name="people-outline" size={16} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.statText}>{memberCount} members</Text>
+            <Ionicons name="people-outline" size={20} color="#64748b" />
+            {memberCount > 0 && (
+              <Text style={styles.memberCountText}>{memberCount}</Text>
+            )}
           </TouchableOpacity>
-        </View>
+        )}
+        
+        {unreadCount > 0 && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadText}>{unreadCount}</Text>
+          </View>
+        )}
       </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  header: {
-    backgroundColor: '#6366F1',
-    paddingTop: Platform.OS === 'web' ? 40 : 60,
-    paddingBottom: 20,
-    paddingHorizontal: 24,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  desktopHeaderContent: {
+  container: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: 'white',
-    marginBottom: 4,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
-  },
-  desktopStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  desktopMembersButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  statText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
-  },
-  mobileHeader: {
-    backgroundColor: '#6366F1',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 12,
-  },
-  headerLeft: {
-    flex: 1,
-    marginRight: 12,
+    borderBottomColor: '#e2e8f0',
+    height: 56,
   },
   channelButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 16,
     flex: 1,
+    marginRight: 12,
   },
-  channelInfo: {
+  dmHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+  },
+  dmAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     marginRight: 8,
   },
-  channelTextContainer: {
+  dmAvatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  dmInitials: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dmInfo: {
     flex: 1,
-    marginLeft: 8,
   },
-  channelButtonHash: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: 'white',
-  },
-  channelButtonText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: 'white',
-    marginBottom: 2,
-  },
-  statusContainer: {
+  onlineStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 2,
   },
-  statusDot: {
+  onlineIndicator: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    marginRight: 6,
+    backgroundColor: '#10b981',
+    marginRight: 4,
   },
-  online: {
-    backgroundColor: '#10B981',
-  },
-  offline: {
-    backgroundColor: '#6B7280',
-  },
-  statusText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
+  onlineText: {
+    fontSize: 11,
+    color: '#10b981',
     fontWeight: '500',
   },
-  membersButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    padding: 12,
-    borderRadius: 16,
-    position: 'relative',
+  hashIcon: {
+    fontSize: 18,
+    color: '#64748b',
+    fontWeight: '600',
+    marginRight: 6,
   },
-  memberCountBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    justifyContent: 'center',
+  channelName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+    flex: 1,
+  },
+  actions: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    gap: 12,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 6,
+    gap: 4,
   },
   memberCountText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
   },
-  headerUnreadBadge: {
-    backgroundColor: '#EF4444',
-    borderRadius: 12,
-    minWidth: 24,
-    height: 24,
-    justifyContent: 'center',
+  unreadBadge: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 20,
     alignItems: 'center',
-    paddingHorizontal: 6,
-    marginLeft: 8,
-    marginRight: 8,
   },
   unreadText: {
     color: 'white',
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '600',
   },
 })

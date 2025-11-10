@@ -18,6 +18,7 @@ import { addReaction, removeReaction } from '../services/reactionService'
 import { fetchChannelMembersList } from '../services/channelService'
 import { IS_MOBILE } from '../constants/chat'
 import { Channel, ChannelMember, Message } from '../types/chat'
+import { createOrGetDirectMessageChannel } from '../services/directMessageService'
 import {
   ChatHeader,
   ChannelList,
@@ -69,8 +70,34 @@ export default function ChatScreen() {
     refresh,
     addReactionToMessage,
     removeReactionFromMessage,
+     createDirectMessage, 
   } = useChatData(user?.id)
   
+
+    const handleStartDirectMessage = useCallback(async (member: ChannelMember) => {
+    if (!user?.id || member.user_id === user.id) {
+      console.log('Cannot start DM: same user or no user ID')
+      return
+    }
+
+    try {
+      console.log('Starting DM with:', member.profiles.username)
+      
+      // Use the new createDirectMessage function
+      const dmChannel = await createDirectMessage(
+        member.user_id,
+        member.profiles
+      )
+      
+      if (dmChannel) {
+        console.log('DM Channel opened:', dmChannel)
+      }
+    } catch (error) {
+      console.error('Error starting direct message:', error)
+      Alert.alert('Error', 'Failed to start direct message. Please try again.')
+    }
+  }, [user?.id, createDirectMessage])
+
 
   const { typingUsers, handleTyping, handleStopTyping } = useTypingIndicator({
     channelId: selectedChannel?.id,
@@ -175,6 +202,9 @@ export default function ChatScreen() {
    const handleEditMessage = useCallback((message: Message) => {
   setEditingMessage(message)
 }, [])
+
+
+
 
   const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
   try {
@@ -287,79 +317,90 @@ const handleCancelReply = useCallback(() => {
     )
   }
 
-  // The rest of your component rendering...
-  if (IS_MOBILE) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <KeyboardAvoidingView 
-          style={styles.container}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={0}
-        >
-          <ChatHeader
-            channelName={selectedChannel?.name}
-            unreadCount={getTotalUnreadCount()}
-            onChannelPress={() => setShowChannelModal(true)}
-            onMembersPress={handleMembersPress}
-            memberCount={channelMembersList.length}
-          />
-
-          {showMembersList ? (
-            <MembersList
-              members={channelMembersList}
-              isVisible={showMembersList}
-              onClose={handleCloseMembers}
-              currentUserId={user?.id}
-            />
-          ) : selectedChannel ? (
-            <>
- <MessageList
-  messages={messages}
-  currentUserId={user.id}
-  channelMembers={channelMembers}
-  channelName={selectedChannel.name}
-  refreshing={refreshing}
-  onRefresh={refresh}
-  onDeleteMessage={handleDeleteMessage}
-  onEditMessage={handleEditMessage} // Pass the handler
-  onReaction={handleReaction}
-  onReply={handleReply}
-  getReadReceiptText={getMessageReadReceiptText}
+  // Mobile layout
+if (IS_MOBILE) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+  <ChatHeader
+  channelName={selectedChannel?.type === 'direct' && selectedChannel?.dm_user
+    ? selectedChannel.dm_user.full_name || selectedChannel.dm_user.username
+    : selectedChannel?.name}
+  unreadCount={getTotalUnreadCount()}
+  onChannelPress={() => setShowChannelModal(true)}
+  onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
+  memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
+  isDM={selectedChannel?.type === 'direct'}
+  dmUser={selectedChannel?.dm_user}
 />
 
-              <TypingIndicator typingUsers={typingUsers} />
-<MessageInput
+        {showMembersList ? (
+          <MembersList
+            members={channelMembersList}
+            isVisible={showMembersList}
+            onClose={handleCloseMembers}
+            currentUserId={user?.id}
+            onStartDirectMessage={handleStartDirectMessage} // ✅ ADD THIS LINE
+          />
+        ) : selectedChannel ? (
+          <>
+            <MessageList
+              messages={messages}
+              currentUserId={user.id}
+              channelMembers={channelMembers}
+              channelName={selectedChannel.name}
+              refreshing={refreshing}
+              onRefresh={refresh}
+              onDeleteMessage={handleDeleteMessage}
+              onEditMessage={handleEditMessage}
+              onReaction={handleReaction}
+              onReply={handleReply}
+              getReadReceiptText={getMessageReadReceiptText}
+            />
+
+            <TypingIndicator typingUsers={typingUsers} />
+            
+          <MessageInput
   value={message}
   onChangeText={setMessage}
   onSend={handleSendMessage}
-  placeholder={`Message #${selectedChannel.name}`}
+  placeholder={
+    selectedChannel?.type === 'direct' && selectedChannel?.dm_user
+      ? `Message ${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
+      : `Message #${selectedChannel?.name || 'channel'}`
+  }
   sending={sending}
   onTyping={handleTyping}
   replyingTo={replyingTo}
   onCancelReply={handleCancelReply}
 />
-            </>
-          ) : (
-            <EmptyState onSelectChannel={() => setShowChannelModal(true)} />
-          )}
+          </>
+        ) : (
+          <EmptyState onSelectChannel={() => setShowChannelModal(true)} />
+        )}
 
-          <ChannelModal
-            visible={showChannelModal}
-            channels={channels}
-            selectedChannelId={selectedChannel?.id}
-            onClose={() => setShowChannelModal(false)}
-            onSelectChannel={handleChannelSelect}
-          />
-          <EditMessageModal
-  visible={!!editingMessage}
-  message={editingMessage}
-  onClose={handleCloseEdit}
-  onSave={handleSaveEdit}
-/>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    )
-  }
+        <ChannelModal
+          visible={showChannelModal}
+          channels={channels}
+          selectedChannelId={selectedChannel?.id}
+          onClose={() => setShowChannelModal(false)}
+          onSelectChannel={handleChannelSelect}
+        />
+        
+        <EditMessageModal
+          visible={!!editingMessage}
+          message={editingMessage}
+          onClose={handleCloseEdit}
+          onSave={handleSaveEdit}
+        />
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  )
+}
 
   // Desktop layout
   return (
@@ -368,13 +409,17 @@ const handleCancelReply = useCallback(() => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <ChatHeader
-        channelName={selectedChannel?.name}
-        unreadCount={0}
-        onChannelPress={() => {}}
-        onMembersPress={handleMembersPress}
-        memberCount={channelMembersList.length}
-      />
+<ChatHeader
+  channelName={selectedChannel?.type === 'direct' && selectedChannel?.dm_user
+    ? selectedChannel.dm_user.full_name || selectedChannel.dm_user.username
+    : selectedChannel?.name}
+  unreadCount={getTotalUnreadCount()}
+  onChannelPress={() => setShowChannelModal(true)}
+  onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
+  memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
+  isDM={selectedChannel?.type === 'direct'}
+  dmUser={selectedChannel?.dm_user}
+/>
 
       <View style={styles.content}>
         <ChannelList
@@ -388,12 +433,14 @@ const handleCancelReply = useCallback(() => {
         <View style={styles.chatArea}>
           {selectedChannel ? (
             <>
-              <ChatAreaHeader   
-                channelName={selectedChannel.name}
-                onBack={() => selectChannel(null)}
-                onMembersPress={handleMembersPress}
-                memberCount={channelMembersList.length}
-              />
+             <ChatAreaHeader   
+  channelName={selectedChannel.name}
+  onBack={() => selectChannel(null)}
+  onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
+  memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
+  isDM={selectedChannel?.type === 'direct'}
+  dmUser={selectedChannel?.dm_user}
+/>
 
               <MessageList
                 messages={messages}
@@ -409,14 +456,18 @@ const handleCancelReply = useCallback(() => {
 
               <TypingIndicator typingUsers={typingUsers} />
 
-              <MessageInput
-                value={message}
-                onChangeText={setMessage}
-                onSend={handleSendMessage}
-                placeholder={`Message #${selectedChannel.name}`}
-                sending={sending}
-                onTyping={handleTyping}
-              />
+          <MessageInput
+  value={message}
+  onChangeText={setMessage}
+  onSend={handleSendMessage}
+  placeholder={
+    selectedChannel?.type === 'direct' && selectedChannel?.dm_user
+      ? `Message ${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
+      : `Message #${selectedChannel?.name || 'channel'}`
+  }
+  sending={sending}
+  onTyping={handleTyping}
+/>
             </>
           ) : (
             <EmptyState />
@@ -426,11 +477,12 @@ const handleCancelReply = useCallback(() => {
         {/* Members List Sidebar for Desktop */}
         {showMembersList && (
           <MembersList
-            members={channelMembersList}
-            isVisible={showMembersList}
-            onClose={handleCloseMembers}
-            currentUserId={user?.id}
-          />
+  members={channelMembersList}
+  isVisible={showMembersList}
+  onClose={handleCloseMembers}
+  currentUserId={user?.id}
+  onStartDirectMessage={handleStartDirectMessage} // Add this
+/>
         )}
       </View>
     </KeyboardAvoidingView>

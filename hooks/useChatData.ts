@@ -8,6 +8,10 @@ import {
   addUserToDefaultChannels,
   fetchChannelMembers
 } from '../services/channelService'
+import { 
+  fetchDirectMessageChannels,
+  createOrGetDirectMessageChannel 
+} from '../services/directMessageService' // Add this import
 import { fetchMessages, sendMessage as sendMessageAPI, deleteMessage as deleteMessageAPI } from '../services/messageService'
 import { markMessagesAsRead } from '../services/readReceiptService'
 import { sanitizeMessage } from '../utils/chatHelpers'
@@ -27,47 +31,118 @@ export const useChatData = (userId: string | undefined) => {
 
   const fetchingRef = useRef(false)
 
-  const loadChannels = useCallback(async () => {
-    if (!userId || fetchingRef.current) {
-      setState(prev => ({ ...prev, loading: false }))
+
+const loadChannels = useCallback(async () => {
+  if (!userId || fetchingRef.current) {
+    setState(prev => ({ ...prev, loading: false }))
+    return
+  }
+
+  try {
+    fetchingRef.current = true
+    setState(prev => ({ ...prev, loading: true }))
+    
+    // Fetch regular channels
+    let channelsData = await fetchChannels(userId)
+    
+    if (channelsData.length === 0) {
+      await addUserToDefaultChannels(userId)
+      channelsData = await fetchChannels(userId)
+    }
+
+    // Fetch DM channels
+    const dmChannels = await fetchDirectMessageChannels(userId)
+    
+    // Combine channels
+    const allChannels = [...channelsData, ...dmChannels]
+    
+    // Remove duplicates by ID
+    const uniqueChannels = Array.from(
+      new Map(allChannels.map(ch => [ch.id, ch])).values()
+    )
+
+    const channelIds = uniqueChannels.map(ch => ch.id)
+    const unreadCounts = await fetchChannelUnreadCounts(userId, channelIds)
+
+    const channelsWithUnread = uniqueChannels.map(channel => ({
+      ...channel,
+      unread_count: unreadCounts[channel.id] || 0
+    }))
+
+    setState(prev => ({
+      ...prev,
+      channels: channelsWithUnread,
+      selectedChannel: channelsWithUnread.length > 0 && !prev.selectedChannel 
+        ? channelsWithUnread.find(ch => ch.type !== 'direct') || channelsWithUnread[0]
+        : prev.selectedChannel
+    }))
+  } catch (error) {
+    console.error('Error fetching channels:', error)
+    Alert.alert('Error', 'Failed to load channels. Please try again.')
+  } finally {
+    setState(prev => ({ ...prev, loading: false }))
+    fetchingRef.current = false
+  }
+}, [userId])
+
+  const selectChannel = useCallback((channel: Channel | null) => {
+    if (!channel) {
+      setState(prev => ({
+        ...prev,
+        selectedChannel: null,
+        messages: [],
+        channelMembers: new Map()
+      }))
       return
     }
 
+    setState(prev => ({
+      ...prev,
+      selectedChannel: channel,
+      channels: prev.channels.map(ch => 
+        ch.id === channel.id ? { ...ch, unread_count: 0 } : ch
+      )
+    }))
+  }, [])
+
+  // Add a new function specifically for creating/opening DMs
+  const createDirectMessage = useCallback(async (
+    targetUserId: string,
+    targetProfile: any
+  ) => {
+    if (!userId) return null
+
     try {
-      fetchingRef.current = true
       setState(prev => ({ ...prev, loading: true }))
       
-      let channelsData = await fetchChannels(userId)
+      const dmChannel = await createOrGetDirectMessageChannel(
+        userId,
+        targetUserId,
+        targetProfile
+      )
+
+      // Reload channels to include the new DM
+      await loadChannels()
       
-      if (channelsData.length === 0) {
-        await addUserToDefaultChannels(userId)
-        channelsData = await fetchChannels(userId)
+      // Select the DM channel
+      selectChannel(dmChannel)
+      
+      // Load messages for the DM
+      if (dmChannel.id) {
+        await loadMessages(dmChannel.id)
+        await loadChannelMembers(dmChannel.id)
       }
 
-      const channelIds = channelsData.map(ch => ch.id)
-      const unreadCounts = await fetchChannelUnreadCounts(userId, channelIds)
-
-      const channelsWithUnread = channelsData.map(channel => ({
-        ...channel,
-        unread_count: unreadCounts[channel.id] || 0
-      }))
-
-      setState(prev => ({
-        ...prev,
-        channels: channelsWithUnread,
-        selectedChannel: channelsWithUnread.length > 0 && !prev.selectedChannel 
-          ? channelsWithUnread[0] 
-          : prev.selectedChannel
-      }))
+      return dmChannel
     } catch (error) {
-      console.error('Error fetching channels:', error)
-      Alert.alert('Error', 'Failed to load channels. Please try again.')
+      console.error('Error creating direct message:', error)
+      Alert.alert('Error', 'Failed to start direct message')
+      return null
     } finally {
       setState(prev => ({ ...prev, loading: false }))
-      fetchingRef.current = false
     }
-  }, [userId])
-
+  }, [userId, loadChannels, selectChannel, loadMessages, loadChannelMembers])
+  
   const loadMessages = useCallback(async (channelId: string) => {
     if (!userId) return
 
@@ -88,16 +163,6 @@ export const useChatData = (userId: string | undefined) => {
     } catch (error) {
       console.error('Error fetching channel members:', error)
     }
-  }, [])
-
-  const selectChannel = useCallback((channel: Channel) => {
-    setState(prev => ({
-      ...prev,
-      selectedChannel: channel,
-      channels: prev.channels.map(ch => 
-        ch.id === channel.id ? { ...ch, unread_count: 0 } : ch
-      )
-    }))
   }, [])
 
   const sendMessage = useCallback(async (content: string, replyToId?: string) => {
@@ -258,25 +323,25 @@ export const useChatData = (userId: string | undefined) => {
   }, [])
 
   const editMessage = useCallback(async (messageId: string, newContent: string) => {
-  if (!userId) return
+    if (!userId) return
 
-  try {
-    const updatedMessage = await updateMessageAPI(messageId, newContent, userId)
-    
-    setState(prev => ({
-      ...prev,
-      messages: prev.messages.map(msg =>
-        msg.id === messageId ? updatedMessage : msg
-      )
-    }))
+    try {
+      const updatedMessage = await updateMessageAPI(messageId, newContent, userId)
+      
+      setState(prev => ({
+        ...prev,
+        messages: prev.messages.map(msg =>
+          msg.id === messageId ? updatedMessage : msg
+        )
+      }))
 
-    return updatedMessage
-  } catch (error) {
-    console.error('Error editing message:', error)
-    Alert.alert('Error', 'Failed to edit message')
-    throw error
-  }
-}, [userId])
+      return updatedMessage
+    } catch (error) {
+      console.error('Error editing message:', error)
+      Alert.alert('Error', 'Failed to edit message')
+      throw error
+    }
+  }, [userId])
 
   return {
     ...state,
@@ -293,6 +358,7 @@ export const useChatData = (userId: string | undefined) => {
     setTypingUsers,
     updateChannelUnreadCount,
     refresh,
-    editMessage
+    editMessage,
+    createDirectMessage // Add this new function
   }
 }

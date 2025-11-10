@@ -5,6 +5,8 @@ export interface Channel {
   description: string
   unread_count: number
   created_at: string
+  type?: 'channel' | 'direct' // Add channel type
+  dm_user?: Profile // For DMs, store the other user's profile
 }
 
 export interface Profile {

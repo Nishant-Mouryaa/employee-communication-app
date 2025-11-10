@@ -1,6 +1,6 @@
-// components/chat/MembersList.tsx
 import React from 'react'
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, Alert } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { ChannelMember } from '../../types/chat'
 import { getUserInitials } from '../../utils/chatHelpers'
 import { IS_MOBILE } from '../../constants/chat'
@@ -10,15 +10,38 @@ interface MembersListProps {
   isVisible: boolean
   onClose: () => void
   currentUserId?: string
+  onStartDirectMessage?: (member: ChannelMember) => void // Add this prop
 }
 
 export const MembersList: React.FC<MembersListProps> = ({
   members,
   isVisible,
   onClose,
-  currentUserId
+  currentUserId,
+  onStartDirectMessage
 }) => {
   if (!isVisible) return null
+
+ const handleMemberPress = (member: ChannelMember) => {
+  console.log('=== MembersList: handleMemberPress ===')
+  console.log('Member:', member)
+  console.log('CurrentUserId:', currentUserId)
+  console.log('onStartDirectMessage exists?', !!onStartDirectMessage)
+  
+  if (member.user_id === currentUserId) {
+    Alert.alert('Info', "You can't message yourself")
+    return
+  }
+  
+  if (onStartDirectMessage) {
+    console.log('Calling onStartDirectMessage with member:', member)
+    onStartDirectMessage(member)
+    onClose()
+  } else {
+    console.log('ERROR: onStartDirectMessage is not provided!')
+    Alert.alert('Error', 'Direct messaging is not configured')
+  }
+}
 
   const formatLastSeen = (lastSeen: string | null, isOnline: boolean | null): string => {
     if (isOnline) return 'Online'
@@ -46,7 +69,12 @@ export const MembersList: React.FC<MembersListProps> = ({
     const status = formatLastSeen(item.profiles.last_seen || null, item.profiles.is_online || false)
 
     return (
-      <View style={styles.memberItem}>
+      <TouchableOpacity
+        style={styles.memberItem}
+        onPress={() => handleMemberPress(item)}
+        disabled={isCurrentUser}
+        activeOpacity={0.7}
+      >
         <View style={styles.avatarContainer}>
           {item.profiles.avatar_url ? (
             <Image 
@@ -80,7 +108,16 @@ export const MembersList: React.FC<MembersListProps> = ({
             {status}
           </Text>
         </View>
-      </View>
+
+        {!isCurrentUser && (
+          <TouchableOpacity 
+            style={styles.messageButton}
+            onPress={() => handleMemberPress(item)}
+          >
+            <Ionicons name="chatbubble-outline" size={20} color="#6366F1" />
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
     )
   }
 
@@ -94,6 +131,7 @@ export const MembersList: React.FC<MembersListProps> = ({
           </TouchableOpacity>
         </View>
         <Text style={styles.memberCount}>{members.length} members</Text>
+        <Text style={styles.hint}>Tap on a member to start a direct message</Text>
       </View>
       
       <FlatList
@@ -161,13 +199,7 @@ const styles = StyleSheet.create({
   list: {
     flex: 1,
   },
-  memberItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f8fafc',
-  },
+
   avatarContainer: {
     position: 'relative',
     marginRight: 12,
@@ -225,5 +257,25 @@ const styles = StyleSheet.create({
   },
   statusOffline: {
     color: '#64748b',
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+  },
+  messageButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+  },
+  hint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 })
