@@ -133,60 +133,73 @@ export default function ProfileScreen() {
     }
   }
 
-  async function updateProfile() {
-    try {
-      setLoading(true)
-      if (!user) throw new Error('No user found!')
+async function updateProfile() {
+  try {
+    if (!user) throw new Error('No user found!')
 
-      if (!username.trim()) {
-        Alert.alert('Validation Error', 'Username is required')
-        return
-      }
-      if (!fullName.trim()) {
-        Alert.alert('Validation Error', 'Full name is required')
-        return
-      }
-
-      const updates = {
-        id: user.id,
-        username: username.trim(),
-        full_name: fullName.trim(),
-        department: department.trim(),
-        position: position.trim(),
-        avatar_url: avatarUrl,
-        bio: bio.trim(),
-        phone: phone.trim(),
-        location: location.trim(),
-        updated_at: new Date().toISOString(),
-      }
-
-      const { error } = await supabase.from('profiles').upsert(updates)
-
-      if (error) {
-        throw error
-      }
-
-      setOriginalValues({
-        username,
-        fullName,
-        department,
-        position,
-        bio,
-        phone,
-        location,
-        avatarUrl
-      })
-
-      Alert.alert('Success', 'Profile updated successfully!')
-      setIsEditing(false)
-    } catch (error) {
-      if (error instanceof Error) {
-        Alert.alert('Update failed', error.message)
-      }
-    } finally {
-      setLoading(false)
+    // Validate BEFORE setting loading state
+    if (!username.trim()) {
+      Alert.alert('Validation Error', 'Username is required')
+      return
     }
+    if (!fullName.trim()) {
+      Alert.alert('Validation Error', 'Full name is required')
+      return
+    }
+
+    setLoading(true) // Move loading state here, after validation
+
+    const updates = {
+      id: user.id,
+      username: username.trim(),
+      full_name: fullName.trim(),
+      department: department.trim(),
+      position: position.trim(),
+      avatar_url: avatarUrl,
+      bio: bio.trim(),
+      phone: phone.trim(),
+      location: location.trim(),
+      updated_at: new Date().toISOString(),
+    }
+
+    // Use update with eq instead of upsert for better reliability
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id)
+
+    if (error) {
+      console.error('Supabase error:', error) // Add logging
+      throw error
+    }
+
+    // Update original values to reflect saved state
+    setOriginalValues({
+      username,
+      fullName,
+      department,
+      position,
+      bio,
+      phone,
+      location,
+      avatarUrl
+    })
+
+    Alert.alert('Success', 'Profile updated successfully!')
+    setIsEditing(false)
+    
+    // Refresh the profile to confirm the update
+    await getProfile()
+    
+  } catch (error) {
+    console.error('Update error:', error) // Add logging
+    if (error instanceof Error) {
+      Alert.alert('Update failed', error.message)
+    }
+  } finally {
+    setLoading(false)
   }
+}
 
   const cancelEdit = () => {
     setUsername(originalValues.username)
