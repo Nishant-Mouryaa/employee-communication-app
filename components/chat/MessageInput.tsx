@@ -2,6 +2,8 @@
 import React from 'react'
 import { View, TextInput, TouchableOpacity, StyleSheet, Text, ActivityIndicator, Platform } from 'react-native'
 import { IS_MOBILE, MESSAGE_MAX_LENGTH } from '../../constants/chat'
+import { Message } from '../../types/chat'
+import { ReplyPreview } from './ReplyPreview'
 
 interface MessageInputProps {
   value: string
@@ -10,6 +12,8 @@ interface MessageInputProps {
   placeholder: string
   sending: boolean
   onTyping: () => void
+  replyingTo?: Message | null
+  onCancelReply?: () => void
 }
 
 export const MessageInput: React.FC<MessageInputProps> = ({
@@ -18,7 +22,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onSend,
   placeholder,
   sending,
-  onTyping
+  onTyping,
+  replyingTo,
+  onCancelReply,
 }) => {
   const handleChangeText = (text: string) => {
     onChangeText(text)
@@ -29,9 +35,55 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   if (IS_MOBILE) {
     return (
-      <View style={styles.inputContainerMobile}>
+      <View style={styles.inputWrapperMobile}>
+        {replyingTo && (
+          <View style={styles.replyPreviewContainer}>
+            <ReplyPreview
+              message={replyingTo}
+              onCancel={onCancelReply}
+            />
+          </View>
+        )}
+        <View style={styles.inputContainerMobile}>
+          <TextInput
+            style={styles.textInputMobile}
+            value={value}
+            onChangeText={handleChangeText}
+            placeholder={placeholder}
+            placeholderTextColor="#999"
+            multiline
+            maxLength={MESSAGE_MAX_LENGTH}
+            editable={!sending}
+          />
+          <TouchableOpacity 
+            style={[styles.sendButtonMobile, !canSend && styles.sendButtonDisabled]} 
+            onPress={onSend}
+            disabled={!canSend}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.sendButtonText}>➤</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    )
+  }
+
+  return (
+    <View style={styles.inputWrapper}>
+      {replyingTo && (
+        <View style={styles.replyPreviewContainer}>
+          <ReplyPreview
+            message={replyingTo}
+            onCancel={onCancelReply}
+          />
+        </View>
+      )}
+      <View style={styles.inputContainer}>
         <TextInput
-          style={styles.textInputMobile}
+          style={styles.textInput}
           value={value}
           onChangeText={handleChangeText}
           placeholder={placeholder}
@@ -41,63 +93,45 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           editable={!sending}
         />
         <TouchableOpacity 
-          style={[styles.sendButtonMobile, !canSend && styles.sendButtonDisabled]} 
+          style={[styles.sendButton, !canSend && styles.sendButtonDisabled]} 
           onPress={onSend}
           disabled={!canSend}
         >
           {sending ? (
             <ActivityIndicator size="small" color="white" />
           ) : (
-            <Text style={styles.sendButtonText}>➤</Text>
+            <Text style={styles.sendButtonText}>Send</Text>
           )}
         </TouchableOpacity>
       </View>
-    )
-  }
-
-  return (
-    <View style={styles.inputContainer}>
-      <TextInput
-        style={styles.textInput}
-        value={value}
-        onChangeText={handleChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#999"
-        multiline
-        maxLength={MESSAGE_MAX_LENGTH}
-        editable={!sending}
-      />
-      <TouchableOpacity 
-        style={[styles.sendButton, !canSend && styles.sendButtonDisabled]} 
-        onPress={onSend}
-        disabled={!canSend}
-      >
-        {sending ? (
-          <ActivityIndicator size="small" color="white" />
-        ) : (
-          <Text style={styles.sendButtonText}>Send</Text>
-        )}
-      </TouchableOpacity>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  inputContainer: {
-    flexDirection: 'row',
-    padding: 16,
+  inputWrapper: {
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
+  },
+  inputWrapperMobile: {
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  replyPreviewContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 16,
     alignItems: 'flex-end',
   },
   inputContainerMobile: {
     flexDirection: 'row',
     padding: 12,
     paddingBottom: Platform.OS === 'ios' ? 12 : 12,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
     alignItems: 'flex-end',
   },
   textInput: {

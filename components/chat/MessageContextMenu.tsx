@@ -11,6 +11,7 @@ interface MessageContextMenuProps {
   onCopy?: () => void
   onEdit?: () => void
   onReact: () => void
+  onReply?: () => void
 }
 
 export const MessageContextMenu: React.FC<MessageContextMenuProps> = ({
@@ -22,6 +23,7 @@ export const MessageContextMenu: React.FC<MessageContextMenuProps> = ({
   onCopy,
   onEdit,
   onReact,
+  onReply,
 }) => {
   if (!visible) return null
 
@@ -43,6 +45,20 @@ export const MessageContextMenu: React.FC<MessageContextMenuProps> = ({
             { top: position.y - 100, left: position.x - 100 }
           ]}
         >
+          {/* Reply - available for all messages */}
+          {onReply && (
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                onReply()
+                onClose()
+              }}
+            >
+              <Text style={styles.menuIcon}>↩️</Text>
+              <Text style={styles.menuText}>Reply</Text>
+            </Pressable>
+          )}
+
           <Pressable 
             style={styles.menuItem}
             onPress={() => {

@@ -1,7 +1,7 @@
 // hooks/useChatData.ts
 import { useState, useCallback, useRef } from 'react'
 import { Alert } from 'react-native'
-import { Channel, Message, ChatState } from '../types/chat'
+import { Channel, Message, ChatState, Reaction } from '../types/chat'
 import { 
   fetchChannels, 
   fetchChannelUnreadCounts,
@@ -99,11 +99,16 @@ export const useChatData = (userId: string | undefined) => {
     }))
   }, [])
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, replyToId?: string) => {
     if (!userId || !state.selectedChannel) return null
 
     const sanitized = sanitizeMessage(content)
     if (!sanitized) return null
+
+    // Find the reply message if replyToId is provided
+    const replyMessage = replyToId 
+      ? state.messages.find(msg => msg.id === replyToId)
+      : undefined
 
     // Create optimistic message
     const optimisticMessage: Message = {
@@ -118,7 +123,10 @@ export const useChatData = (userId: string | undefined) => {
         full_name: 'You',
       },
       read_by: [],
-      read_count: 0
+      read_count: 0,
+      reactions: [],
+      reply_to: replyToId,
+      reply_message: replyMessage
     }
 
     setState(prev => ({ 
@@ -128,7 +136,12 @@ export const useChatData = (userId: string | undefined) => {
     }))
 
     try {
-      const sentMessage = await sendMessageAPI(sanitized, state.selectedChannel.id, userId)
+      const sentMessage = await sendMessageAPI(
+        sanitized, 
+        state.selectedChannel.id, 
+        userId,
+        replyToId
+      )
       
       setState(prev => ({
         ...prev,
@@ -147,7 +160,7 @@ export const useChatData = (userId: string | undefined) => {
       }))
       throw error
     }
-  }, [userId, state.selectedChannel])
+  }, [userId, state.selectedChannel, state.messages])
 
   const deleteMessage = useCallback(async (messageId: string) => {
     if (!userId) return
@@ -164,11 +177,11 @@ export const useChatData = (userId: string | undefined) => {
     }
   }, [userId])
 
-  const updateMessage = useCallback((messageId: string, updates: Partial<Message>) => {
+  const updateMessage = useCallback((messageId: string, updateFn: (msg: Message) => Partial<Message>) => {
     setState(prev => ({
       ...prev,
       messages: prev.messages.map(msg =>
-        msg.id === messageId ? { ...msg, ...updates } : msg
+        msg.id === messageId ? { ...msg, ...updateFn(msg) } : msg
       )
     }))
   }, [])
@@ -208,40 +221,40 @@ export const useChatData = (userId: string | undefined) => {
   }, [loadChannels, loadMessages, state.selectedChannel])
 
   const addReactionToMessage = useCallback((reaction: Reaction) => {
-  setState(prev => ({
-    ...prev,
-    messages: prev.messages.map(msg => {
-      if (msg.id === reaction.message_id) {
-        const currentReactions = msg.reactions || []
-        // Check if reaction already exists to avoid duplicates
-        const exists = currentReactions.some(r => r.id === reaction.id)
-        if (!exists) {
-          return {
-            ...msg,
-            reactions: [...currentReactions, reaction]
+    setState(prev => ({
+      ...prev,
+      messages: prev.messages.map(msg => {
+        if (msg.id === reaction.message_id) {
+          const currentReactions = msg.reactions || []
+          // Check if reaction already exists to avoid duplicates
+          const exists = currentReactions.some(r => r.id === reaction.id)
+          if (!exists) {
+            return {
+              ...msg,
+              reactions: [...currentReactions, reaction]
+            }
           }
         }
-      }
-      return msg
-    })
-  }))
-}, [])
+        return msg
+      })
+    }))
+  }, [])
 
-const removeReactionFromMessage = useCallback((reactionId: string, messageId: string) => {
-  setState(prev => ({
-    ...prev,
-    messages: prev.messages.map(msg => {
-      if (msg.id === messageId) {
-        const currentReactions = msg.reactions || []
-        return {
-          ...msg,
-          reactions: currentReactions.filter(r => r.id !== reactionId)
+  const removeReactionFromMessage = useCallback((reactionId: string, messageId: string) => {
+    setState(prev => ({
+      ...prev,
+      messages: prev.messages.map(msg => {
+        if (msg.id === messageId) {
+          const currentReactions = msg.reactions || []
+          return {
+            ...msg,
+            reactions: currentReactions.filter(r => r.id !== reactionId)
+          }
         }
-      }
-      return msg
-    })
-  }))
-}, [])
+        return msg
+      })
+    }))
+  }, [])
 
   return {
     ...state,
@@ -253,8 +266,8 @@ const removeReactionFromMessage = useCallback((reactionId: string, messageId: st
     deleteMessage,
     updateMessage,
     addMessage,
-     addReactionToMessage, // Add this
-  removeReactionFromMessage, // Add this
+    addReactionToMessage,
+    removeReactionFromMessage,
     setTypingUsers,
     updateChannelUnreadCount,
     refresh,

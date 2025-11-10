@@ -40,6 +40,10 @@ export default function ChatScreen() {
   const [showMembersList, setShowMembersList] = useState(false)
   const [hasUserChecked, setHasUserChecked] = useState(false)
   const [channelMembersList, setChannelMembersList] = useState<ChannelMember[]>([])
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null)
+  const handleReply = useCallback((message: Message) => {
+  setReplyingTo(message)
+}, [])
 
   // All hooks must be called unconditionally and in the same order every render
   const {
@@ -170,19 +174,24 @@ export default function ChatScreen() {
     setShowChannelModal(false)
   }, [selectChannel])
 
-  const handleSendMessage = useCallback(async () => {
-    if (!message.trim() || !selectedChannel || !user) return
+const handleSendMessage = useCallback(async () => {
+  if (!message.trim() || !selectedChannel || !user) return
 
-    try {
-      await sendChatMessage(message)
-      setMessage('')
-      await handleStopTyping()
-    } catch (error) {
-      console.error('Error sending message:', error)
-      Alert.alert('Error', 'Failed to send message. Please try again.')
-    }
-  }, [message, selectedChannel, user, sendChatMessage, handleStopTyping])
+  try {
+    await sendChatMessage(message, replyingTo?.id) // Pass reply ID
+    setMessage('')
+    setReplyingTo(null) // Clear reply after sending
+    await handleStopTyping()
+  } catch (error) {
+    console.error('Error sending message:', error)
+    Alert.alert('Error', 'Failed to send message. Please try again.')
+  }
+}, [message, selectedChannel, user, sendChatMessage, handleStopTyping, replyingTo])
 
+// Add cancel reply handler
+const handleCancelReply = useCallback(() => {
+  setReplyingTo(null)
+}, [])
   const handleDeleteMessage = useCallback((messageId: string, isOwn: boolean) => {
     if (!isOwn) return
 
@@ -284,27 +293,29 @@ export default function ChatScreen() {
           ) : selectedChannel ? (
             <>
               <MessageList
-                messages={messages}
-                currentUserId={user.id}
-                channelMembers={channelMembers}
-                channelName={selectedChannel.name}
-                refreshing={refreshing}
-                onRefresh={refresh}
-                onDeleteMessage={handleDeleteMessage}
-                onReaction={handleReaction}
-                getReadReceiptText={getMessageReadReceiptText}
-              />
-              
-              <TypingIndicator typingUsers={typingUsers} />
+  messages={messages}
+  currentUserId={user.id}
+  channelMembers={channelMembers}
+  channelName={selectedChannel.name}
+  refreshing={refreshing}
+  onRefresh={refresh}
+  onDeleteMessage={handleDeleteMessage}
+  onReaction={handleReaction}
+  onReply={handleReply}
+  getReadReceiptText={getMessageReadReceiptText}
+/>
 
-              <MessageInput
-                value={message}
-                onChangeText={setMessage}
-                onSend={handleSendMessage}
-                placeholder={`Message #${selectedChannel.name}`}
-                sending={sending}
-                onTyping={handleTyping}
-              />
+              <TypingIndicator typingUsers={typingUsers} />
+<MessageInput
+  value={message}
+  onChangeText={setMessage}
+  onSend={handleSendMessage}
+  placeholder={`Message #${selectedChannel.name}`}
+  sending={sending}
+  onTyping={handleTyping}
+  replyingTo={replyingTo}
+  onCancelReply={handleCancelReply}
+/>
             </>
           ) : (
             <EmptyState onSelectChannel={() => setShowChannelModal(true)} />

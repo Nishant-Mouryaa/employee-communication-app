@@ -1,4 +1,4 @@
-// components/chat/MembersList.tsx
+// Alternative version with bottom close button for mobile
 import React from 'react'
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native'
 import { ChannelMember } from '../../types/chat'
@@ -89,9 +89,11 @@ export const MembersList: React.FC<MembersListProps> = ({
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.headerTitle}>Channel Members</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>×</Text>
-          </TouchableOpacity>
+          {!IS_MOBILE && (
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+              <Text style={styles.closeButtonText}>×</Text>
+            </TouchableOpacity>
+          )}
         </View>
         <Text style={styles.memberCount}>{members.length} members</Text>
       </View>
@@ -103,6 +105,13 @@ export const MembersList: React.FC<MembersListProps> = ({
         style={styles.list}
         showsVerticalScrollIndicator={false}
       />
+
+      {/* Mobile-only close button at bottom */}
+      {IS_MOBILE && (
+        <TouchableOpacity style={styles.mobileCloseButton} onPress={onClose}>
+          <Text style={styles.mobileCloseButtonText}>Close</Text>
+        </TouchableOpacity>
+      )}
     </View>
   )
 }
@@ -157,6 +166,19 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     lineHeight: 20,
     marginTop: -2,
+  },
+  mobileCloseButton: {
+    backgroundColor: '#6366F1',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  mobileCloseButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   list: {
     flex: 1,

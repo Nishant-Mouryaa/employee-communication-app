@@ -35,6 +35,8 @@ export interface Message {
   read_by?: string[]
   read_count?: number
   reactions?: Reaction[]
+  reply_to?: string
+  reply_message?: Message
 }
 
 export interface TypingUser {

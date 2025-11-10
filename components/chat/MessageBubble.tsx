@@ -7,6 +7,7 @@ import { IS_MOBILE } from '../../constants/chat'
 import { MessageReactions } from './MessageReactions'
 import { ReactionPicker } from './ReactionPicker'
 import { MessageContextMenu } from './MessageContextMenu'
+import { ReplyPreview } from './ReplyPreview'
 
 interface MessageBubbleProps {
   message: Message
@@ -15,6 +16,8 @@ interface MessageBubbleProps {
   onReaction: (messageId: string, emoji: string) => void
   onDelete?: (messageId: string) => void
   onEdit?: (messageId: string, content: string) => void
+  onReply?: (message: Message) => void
+  onReplyPress?: (messageId: string) => void
   readReceiptText?: string
   showReadReceipt?: boolean
   currentUserId?: string
@@ -27,6 +30,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onReaction,
   onDelete,
   onEdit,
+  onReply,
+  onReplyPress,
   readReceiptText,
   showReadReceipt,
   currentUserId
@@ -64,6 +69,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const handleEdit = () => {
     if (onEdit) {
       onEdit(message.id, message.content)
+    }
+  }
+
+  const handleReply = () => {
+    if (onReply) {
+      onReply(message)
     }
   }
 
@@ -122,6 +133,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     {message.profiles?.full_name || message.profiles?.username || 'Unknown User'}
                   </Text>
                 )}
+
+                {/* Reply Preview in Message */}
+                {message.reply_message && onReplyPress && (
+                  <ReplyPreview
+                    message={message.reply_message}
+                    isInMessage={isOwn}
+                    onPress={() => onReplyPress(message.reply_to!)}
+                  />
+                )}
+
                 <Text style={[
                   styles.messageText,
                   isOwn ? styles.ownMessageText : styles.otherMessageText
@@ -150,10 +171,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               
               {/* Reactions positioned outside bubble */}
               {message.reactions && message.reactions.length > 0 && (
-                <View style={[
-                  styles.reactionsContainer, 
-                  isOwn ? styles.reactionsContainerOwn : styles.reactionsContainerOther
-                ]}>
+                <View style={[styles.reactionsContainer, isOwn && styles.reactionsContainerOwn]}>
                   <MessageReactions
                     reactions={message.reactions}
                     onReactionPress={handleReactionPress}
@@ -172,6 +190,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         position={menuPosition}
         isOwnMessage={isOwn}
         onReact={() => setShowReactionPicker(true)}
+        onReply={handleReply}
         onCopy={handleCopy}
         onEdit={isOwn ? handleEdit : undefined}
         onDelete={isOwn ? handleDelete : undefined}
@@ -187,9 +206,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   )
 }
 
+// ... keep all the existing styles and add these new ones:
 const styles = StyleSheet.create({
+  // ... all existing styles ...
   messageContainer: {
-    marginBottom: 16, // Increased to accommodate reactions
+    marginBottom: 12,
     paddingHorizontal: 4,
   },
   ownMessageContainer: {
@@ -246,7 +267,6 @@ const styles = StyleSheet.create({
   },
   bubbleWrapper: {
     position: 'relative',
-    marginBottom: 8, // Space for reactions
   },
   messageBubble: {
     paddingHorizontal: 16,
@@ -275,11 +295,6 @@ const styles = StyleSheet.create({
   ownMessageBubble: {
     backgroundColor: '#6366F1',
     borderBottomRightRadius: 6,
-    ...Platform.select({
-      web: {
-        background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
-      },
-    }),
   },
   otherMessageBubble: {
     backgroundColor: '#ffffff',
@@ -329,7 +344,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 12,
   },
-  readReceiptDetail: {
+    readReceiptDetail: {
     fontSize: 10,
     color: 'rgba(255, 255, 255, 0.7)',
     fontStyle: 'italic',
@@ -339,8 +354,8 @@ const styles = StyleSheet.create({
   },
   reactionsContainer: {
     position: 'absolute',
-    bottom: -12, // Position below the bubble
-    zIndex: 10, // Ensure it appears above other elements
+    bottom: -8,
+    left: 12,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -349,19 +364,15 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
       },
       android: {
-        elevation: 6, // Increased elevation
+        elevation: 3,
       },
       web: {
-        filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2))',
+        filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15))',
       },
     }),
   },
   reactionsContainerOwn: {
-    right: 8,
     left: 'auto',
-  },
-  reactionsContainerOther: {
-    left: 8,
-    right: 'auto',
+    right: 12,
   },
 })

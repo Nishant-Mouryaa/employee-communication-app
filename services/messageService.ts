@@ -4,7 +4,6 @@ import { Message } from '../types/chat'
 import { getMessageReactions } from './reactionService'
 
 export const fetchMessages = async (channelId: string) => {
-  // Fetch messages with profiles
   const { data: messages, error } = await supabase
     .from('chat_messages')
     .select(`
@@ -22,7 +21,32 @@ export const fetchMessages = async (channelId: string) => {
   if (error) throw error
   if (!messages || messages.length === 0) return []
 
-  // Fetch read receipts for all messages in one query
+  // Fetch reply messages
+  const replyIds = messages
+    .filter(m => m.reply_to)
+    .map(m => m.reply_to)
+  
+  let replyMessages = new Map()
+  if (replyIds.length > 0) {
+    const { data: replies } = await supabase
+      .from('chat_messages')
+      .select(`
+        *,
+        profiles (
+          id,
+          username,
+          full_name,
+          avatar_url
+        )
+      `)
+      .in('id', replyIds)
+    
+    replies?.forEach(reply => {
+      replyMessages.set(reply.id, reply)
+    })
+  }
+
+  // Fetch read receipts for all messages
   const messageIds = messages.map(m => m.id)
   const { data: reads, error: readsError } = await supabase
     .from('chat_message_reads')
@@ -33,24 +57,25 @@ export const fetchMessages = async (channelId: string) => {
     console.error('Error fetching read receipts:', readsError)
   }
 
-  // Group reads by message_id
   const readsByMessage = new Map<string, string[]>()
   reads?.forEach(read => {
     const existing = readsByMessage.get(read.message_id) || []
     readsByMessage.set(read.message_id, [...existing, read.user_id])
   })
 
-  // Fetch reactions for each message and combine with read receipts
+  // Fetch reactions and combine everything
   const messagesWithReactionsAndReads = await Promise.all(
     messages.map(async (message) => {
       const reactions = await getMessageReactions(message.id)
       const readBy = readsByMessage.get(message.id) || []
+      const replyMessage = message.reply_to ? replyMessages.get(message.reply_to) : null
       
       return {
         ...message,
         reactions: reactions || [],
         read_by: readBy,
-        read_count: readBy.length
+        read_count: readBy.length,
+        reply_message: replyMessage
       }
     })
   )
@@ -58,14 +83,27 @@ export const fetchMessages = async (channelId: string) => {
   return messagesWithReactionsAndReads
 }
 
+// services/messageService.ts - Update sendMessage function
+
 export const sendMessage = async (
   content: string,
   channelId: string,
-  userId: string
+  userId: string,
+  replyToId?: string
 ): Promise<Message> => {
+  const messageData: any = {
+    content,
+    channel_id: channelId,
+    user_id: userId,
+  }
+
+  if (replyToId) {
+    messageData.reply_to = replyToId
+  }
+
   const { data, error } = await supabase
     .from('chat_messages')
-    .insert([{ content, channel_id: channelId, user_id: userId }])
+    .insert([messageData])
     .select(`
       *,
       profiles!fk_chat_messages_user_id (
@@ -78,13 +116,33 @@ export const sendMessage = async (
     .single()
 
   if (error) throw error
+
+  // Fetch reply message if exists
+  let replyMessage = null
+  if (data.reply_to) {
+    const { data: replyData } = await supabase
+      .from('chat_messages')
+      .select(`
+        *,
+        profiles!fk_chat_messages_user_id (
+          id,
+          username,
+          full_name,
+          avatar_url
+        )
+      `)
+      .eq('id', data.reply_to)
+      .single()
+    
+    replyMessage = replyData
+  }
   
-  // New messages start with no reads
   return { 
     ...data, 
     reactions: [],
     read_by: [], 
-    read_count: 0 
+    read_count: 0,
+    reply_message: replyMessage
   }
 }
 

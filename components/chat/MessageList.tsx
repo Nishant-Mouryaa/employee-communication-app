@@ -16,6 +16,7 @@ interface MessageListProps {
   onDeleteMessage: (messageId: string, isOwn: boolean) => void
   onEditMessage?: (messageId: string, newContent: string) => void
   onReaction: (messageId: string, emoji: string) => void
+  onReply?: (message: Message) => void
   getReadReceiptText: (message: Message) => string
 }
 
@@ -29,6 +30,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   onDeleteMessage,
   onEditMessage,
   onReaction,
+  onReply,
   getReadReceiptText
 }) => {
   const flatListRef = useRef<FlatList>(null)
@@ -49,9 +51,14 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   const handleEdit = (messageId: string, content: string) => {
     if (onEditMessage) {
-      // You might want to show an edit modal/input here
-      // For now, we'll just pass it through
       onEditMessage(messageId, content)
+    }
+  }
+
+  const scrollToMessage = (messageId: string) => {
+    const index = messages.findIndex(m => m.id === messageId)
+    if (index !== -1) {
+      flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 })
     }
   }
 
@@ -75,6 +82,8 @@ export const MessageList: React.FC<MessageListProps> = ({
           onReaction={onReaction}
           onDelete={handleDelete}
           onEdit={handleEdit}
+          onReply={onReply}
+          onReplyPress={scrollToMessage}
           readReceiptText={getReadReceiptText(item)}
           showReadReceipt={!item.id.startsWith('temp-')}
           currentUserId={currentUserId}
@@ -99,6 +108,12 @@ export const MessageList: React.FC<MessageListProps> = ({
         />
       }
       renderItem={renderItem}
+      onScrollToIndexFailed={(info) => {
+        const wait = new Promise(resolve => setTimeout(resolve, 500))
+        wait.then(() => {
+          flatListRef.current?.scrollToIndex({ index: info.index, animated: true })
+        })
+      }}
       ListEmptyComponent={
         <View style={styles.emptyMessages}>
           <Text style={styles.emptyMessageEmoji}>💬</Text>
@@ -115,6 +130,7 @@ export const MessageList: React.FC<MessageListProps> = ({
 const styles = StyleSheet.create({
   messagesList: {
     flex: 1,
+    backgroundColor: '#fafafa',
   },
   messagesContainer: {
     padding: 20,
@@ -138,6 +154,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     overflow: 'hidden',
+    fontWeight: '600',
   },
   emptyMessages: {
     flex: 1,
