@@ -2,12 +2,15 @@
 import { supabase } from '../lib/supabase'
 import { Message } from '../types/chat'
 
-export const fetchMessages = async (channelId: string): Promise<Message[]> => {
-  const { data: messagesData, error } = await supabase
+
+import { getMessageReactions } from './reactionService'
+
+export const fetchMessages = async (channelId: string) => {
+  const { data: messages, error } = await supabase
     .from('chat_messages')
     .select(`
       *,
-      profiles!fk_chat_messages_user_id (
+      profiles (
         id,
         username,
         full_name,
@@ -19,26 +22,21 @@ export const fetchMessages = async (channelId: string): Promise<Message[]> => {
 
   if (error) throw error
 
-  const messageIds = messagesData?.map(m => m.id) || []
-  const { data: readReceipts } = await supabase
-    .from('chat_message_reads')
-    .select('message_id, user_id')
-    .in('message_id', messageIds)
+  // Fetch reactions for each message
+  const messagesWithReactions = await Promise.all(
+    (messages || []).map(async (message) => {
+      const reactions = await getMessageReactions(message.id)
+      return {
+        ...message,
+        reactions: reactions || []
+      }
+    })
+  )
 
-  const readsByMessage = (readReceipts || []).reduce((acc, read) => {
-    if (!acc[read.message_id]) {
-      acc[read.message_id] = []
-    }
-    acc[read.message_id].push(read.user_id)
-    return acc
-  }, {} as Record<string, string[]>)
-
-  return (messagesData || []).map(msg => ({
-    ...msg,
-    read_by: readsByMessage[msg.id] || [],
-    read_count: (readsByMessage[msg.id] || []).length
-  }))
+  return messagesWithReactions
 }
+
+// ... rest of your messageService functions
 
 export const sendMessage = async (
   content: string,

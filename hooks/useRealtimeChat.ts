@@ -2,7 +2,8 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import { Message } from '../types/chat'
+import { Message, Reaction } from '../types/chat'
+import { getReactionWithProfile } from '../services/reactionService'
 
 interface UseRealtimeChatProps {
   channelId: string | undefined
@@ -10,6 +11,8 @@ interface UseRealtimeChatProps {
   onNewMessage: (message: Message) => void
   onDeleteMessage: (messageId: string) => void
   onMessageRead: (messageId: string, userId: string) => void
+  onReactionAdded: (reaction: Reaction) => void
+  onReactionRemoved: (reactionId: string, messageId: string) => void
 }
 
 export const useRealtimeChat = ({
@@ -17,7 +20,9 @@ export const useRealtimeChat = ({
   userId,
   onNewMessage,
   onDeleteMessage,
-  onMessageRead
+  onMessageRead,
+  onReactionAdded,
+  onReactionRemoved
 }: UseRealtimeChatProps) => {
   const subscriptionRef = useRef<RealtimeChannel | null>(null)
 
@@ -51,7 +56,8 @@ export const useRealtimeChat = ({
                 avatar_url: null 
               },
               read_by: [],
-              read_count: 0
+              read_count: 0,
+              reactions: [] // Initialize with empty reactions
             } as Message
 
             onNewMessage(messageWithProfile)
@@ -98,9 +104,48 @@ export const useRealtimeChat = ({
     return channel
   }, [channelId, userId, onMessageRead])
 
+  const setupReactionsSubscription = useCallback(() => {
+    if (!channelId) return
+
+    const channel = supabase
+      .channel(`reactions:${channelId}:${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'reactions'
+        },
+        async (payload) => {
+          try {
+            // Get the reaction with profile data
+            const reactionWithProfile = await getReactionWithProfile(payload.new)
+            onReactionAdded(reactionWithProfile)
+          } catch (error) {
+            console.error('Error handling reaction insert:', error)
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'reactions'
+        },
+        (payload) => {
+          onReactionRemoved(payload.old.id, payload.old.message_id)
+        }
+      )
+      .subscribe()
+
+    return channel
+  }, [channelId, onReactionAdded, onReactionRemoved])
+
   useEffect(() => {
     const messageChannel = setupSubscription()
     const readChannel = setupReadReceiptsSubscription()
+    const reactionChannel = setupReactionsSubscription()
 
     return () => {
       if (subscriptionRef.current) {
@@ -109,6 +154,9 @@ export const useRealtimeChat = ({
       if (readChannel) {
         supabase.removeChannel(readChannel)
       }
+      if (reactionChannel) {
+        supabase.removeChannel(reactionChannel)
+      }
     }
-  }, [setupSubscription, setupReadReceiptsSubscription])
+  }, [setupSubscription, setupReadReceiptsSubscription, setupReactionsSubscription])
 }

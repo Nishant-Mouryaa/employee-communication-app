@@ -207,6 +207,42 @@ export const useChatData = (userId: string | undefined) => {
     setState(prev => ({ ...prev, refreshing: false }))
   }, [loadChannels, loadMessages, state.selectedChannel])
 
+  const addReactionToMessage = useCallback((reaction: Reaction) => {
+  setState(prev => ({
+    ...prev,
+    messages: prev.messages.map(msg => {
+      if (msg.id === reaction.message_id) {
+        const currentReactions = msg.reactions || []
+        // Check if reaction already exists to avoid duplicates
+        const exists = currentReactions.some(r => r.id === reaction.id)
+        if (!exists) {
+          return {
+            ...msg,
+            reactions: [...currentReactions, reaction]
+          }
+        }
+      }
+      return msg
+    })
+  }))
+}, [])
+
+const removeReactionFromMessage = useCallback((reactionId: string, messageId: string) => {
+  setState(prev => ({
+    ...prev,
+    messages: prev.messages.map(msg => {
+      if (msg.id === messageId) {
+        const currentReactions = msg.reactions || []
+        return {
+          ...msg,
+          reactions: currentReactions.filter(r => r.id !== reactionId)
+        }
+      }
+      return msg
+    })
+  }))
+}, [])
+
   return {
     ...state,
     loadChannels,
@@ -217,6 +253,8 @@ export const useChatData = (userId: string | undefined) => {
     deleteMessage,
     updateMessage,
     addMessage,
+     addReactionToMessage, // Add this
+  removeReactionFromMessage, // Add this
     setTypingUsers,
     updateChannelUnreadCount,
     refresh,

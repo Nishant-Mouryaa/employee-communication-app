@@ -14,6 +14,15 @@ export interface Profile {
   avatar_url?: string
 }
 
+export interface Reaction {
+  id: string
+  message_id: string
+  user_id: string
+  emoji: string
+  created_at: string
+  profiles?: Profile
+}
+
 export interface Message {
   id: string
   content: string
@@ -23,6 +32,7 @@ export interface Message {
   profiles: Profile
   read_by?: string[]
   read_count?: number
+  reactions?: Reaction[]
 }
 
 export interface TypingUser {

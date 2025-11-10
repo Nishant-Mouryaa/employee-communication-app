@@ -14,8 +14,10 @@ interface MessageListProps {
   refreshing: boolean
   onRefresh: () => void
   onDeleteMessage: (messageId: string, isOwn: boolean) => void
+  onReaction: (messageId: string, emoji: string) => void
   getReadReceiptText: (message: Message) => string
 }
+
 
 export const MessageList: React.FC<MessageListProps> = ({
   messages,
@@ -25,6 +27,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   refreshing,
   onRefresh,
   onDeleteMessage,
+  onReaction,
   getReadReceiptText
 }) => {
   const flatListRef = useRef<FlatList>(null)
@@ -39,7 +42,7 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   const isOwnMessage = (messageUserId: string) => messageUserId === currentUserId
 
-  const renderItem = ({ item, index }: { item: Message; index: number }) => {
+const renderItem = ({ item, index }: { item: Message; index: number }) => {
     const previousMessage = index > 0 ? messages[index - 1] : null
     const showDateHeader = shouldShowDateHeader(item, previousMessage)
 
@@ -56,13 +59,14 @@ export const MessageList: React.FC<MessageListProps> = ({
           message={item}
           isOwn={isOwnMessage(item.user_id)}
           onLongPress={() => onDeleteMessage(item.id, isOwnMessage(item.user_id))}
+          onReaction={onReaction}
           readReceiptText={getReadReceiptText(item)}
           showReadReceipt={!item.id.startsWith('temp-')}
+          currentUserId={currentUserId}
         />
       </View>
     )
   }
-
   return (
     <FlatList
       ref={flatListRef}

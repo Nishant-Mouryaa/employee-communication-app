@@ -9,10 +9,11 @@ import {
   SafeAreaView,
 } from 'react-native'
 import { useAuth } from '../hooks/useAuth'
-import { useChatData } from '../hooks/useChatData'
+import { useChatData } from '../hooks/useChatData' // Make sure this import is correct
 import { useRealtimeChat } from '../hooks/useRealtimeChat'
 import { useTypingIndicator } from '../hooks/useTypingIndicator'
 import { markMessageAsRead, getReadReceiptText } from '../services/readReceiptService'
+import { addReaction, removeReaction } from '../services/reactionService'
 import { IS_MOBILE } from '../constants/chat'
 import { Channel } from '../types/chat'
 import {
@@ -23,7 +24,7 @@ import {
   TypingIndicator,
   ChannelModal,
   EmptyState,
-    ChatAreaHeader,
+  ChatAreaHeader,
   LoadingState,
 } from '../components/chat'
 
@@ -51,6 +52,8 @@ export default function ChatScreen() {
     addMessage,
     updateChannelUnreadCount,
     refresh,
+    addReactionToMessage, // Make sure this is destructured
+    removeReactionFromMessage, // Make sure this is destructured
   } = useChatData(user?.id)
 
   const { typingUsers, handleTyping, handleStopTyping } = useTypingIndicator({
@@ -85,7 +88,19 @@ export default function ChatScreen() {
         return {}
       })
     }, [updateMessage]),
+    onReactionAdded: useCallback((reaction) => {
+      if (addReactionToMessage) {
+        addReactionToMessage(reaction)
+      }
+    }, [addReactionToMessage]),
+    onReactionRemoved: useCallback((reactionId, messageId) => {
+      if (removeReactionFromMessage) {
+        removeReactionFromMessage(reactionId, messageId)
+      }
+    }, [removeReactionFromMessage]),
   })
+
+  // ... rest of your ChatScreen component remains the same
 
   useEffect(() => {
     if (user?.id) {
@@ -135,6 +150,28 @@ export default function ChatScreen() {
       ]
     )
   }, [deleteMessage])
+
+  const handleReaction = useCallback(async (messageId: string, emoji: string) => {
+    if (!user?.id) return
+
+    try {
+      const message = messages.find(m => m.id === messageId)
+      const existingReaction = message?.reactions?.find(
+        r => r.emoji === emoji && r.user_id === user.id
+      )
+
+      if (existingReaction) {
+        // Remove reaction if user already reacted with this emoji
+        await removeReaction(existingReaction.id)
+      } else {
+        // Add new reaction
+        await addReaction(messageId, emoji, user.id)
+      }
+    } catch (error) {
+      console.error('Error handling reaction:', error)
+      Alert.alert('Error', 'Failed to update reaction')
+    }
+  }, [user?.id, messages])
 
   const getTotalUnreadCount = useCallback(() => {
     return channels.reduce((sum, channel) => sum + channel.unread_count, 0)
@@ -190,6 +227,7 @@ export default function ChatScreen() {
                 refreshing={refreshing}
                 onRefresh={refresh}
                 onDeleteMessage={handleDeleteMessage}
+                onReaction={handleReaction}
                 getReadReceiptText={getMessageReadReceiptText}
               />
               
@@ -258,6 +296,7 @@ export default function ChatScreen() {
                 refreshing={refreshing}
                 onRefresh={refresh}
                 onDeleteMessage={handleDeleteMessage}
+                onReaction={handleReaction}
                 getReadReceiptText={getMessageReadReceiptText}
               />
 
