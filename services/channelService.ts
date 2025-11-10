@@ -1,6 +1,6 @@
 // services/channelService.ts
 import { supabase } from '../lib/supabase'
-import { Channel } from '../types/chat'
+import { Channel, ChannelMember } from '../types/chat'
 import { DEFAULT_CHANNELS } from '../constants/chat'
 
 export const fetchChannels = async (userId: string): Promise<Channel[]> => {
@@ -84,28 +84,66 @@ export const addUserToDefaultChannels = async (userId: string): Promise<void> =>
   if (error) throw error
 }
 
-export const fetchChannelMembers = async (channelId: string) => {
+
+
+
+export const fetchChannelMembers = async (channelId: string): Promise<Map<string, ChannelMember>> => {
   const { data, error } = await supabase
     .from('channel_members')
     .select(`
       user_id,
+      channel_id,
+      joined_at,
       profiles!inner (
         id,
         username,
         full_name,
-        avatar_url
+        avatar_url,
+        is_online,
+        last_seen
       )
     `)
     .eq('channel_id', channelId)
+    .order('joined_at', { ascending: true })
 
   if (error) throw error
 
   const membersMap = new Map()
   data?.forEach(member => {
     if (member.profiles) {
-      membersMap.set(member.user_id, member.profiles)
+      membersMap.set(member.user_id, {
+        user_id: member.user_id,
+        channel_id: member.channel_id,
+        joined_at: member.joined_at,
+        profiles: member.profiles
+      })
     }
   })
   
   return membersMap
 }
+
+// Add a function to get detailed member info
+export const fetchChannelMembersList = async (channelId: string): Promise<ChannelMember[]> => {
+  const { data, error } = await supabase
+    .from('channel_members')
+    .select(`
+      user_id,
+      channel_id,
+      joined_at,
+      profiles!inner (
+        id,
+        username,
+        full_name,
+        avatar_url,
+        is_online,
+        last_seen
+      )
+    `)
+    .eq('channel_id', channelId)
+    .order('joined_at', { ascending: true })
+
+  if (error) throw error
+  return data || []
+}
+

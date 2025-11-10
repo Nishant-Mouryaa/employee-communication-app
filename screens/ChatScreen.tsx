@@ -9,13 +9,15 @@ import {
   SafeAreaView,
 } from 'react-native'
 import { useAuth } from '../hooks/useAuth'
-import { useChatData } from '../hooks/useChatData' // Make sure this import is correct
+import { useChatData } from '../hooks/useChatData'
 import { useRealtimeChat } from '../hooks/useRealtimeChat'
 import { useTypingIndicator } from '../hooks/useTypingIndicator'
+import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import { markMessageAsRead, getReadReceiptText } from '../services/readReceiptService'
 import { addReaction, removeReaction } from '../services/reactionService'
+import { fetchChannelMembersList } from '../services/channelService'
 import { IS_MOBILE } from '../constants/chat'
-import { Channel } from '../types/chat'
+import { Channel, ChannelMember } from '../types/chat'
 import {
   ChatHeader,
   ChannelList,
@@ -26,14 +28,20 @@ import {
   EmptyState,
   ChatAreaHeader,
   LoadingState,
+  MembersList,
 } from '../components/chat'
 
 export default function ChatScreen() {
   const { user } = useAuth()
+  
+  // All state declarations at the top - this is crucial!
   const [message, setMessage] = useState('')
   const [showChannelModal, setShowChannelModal] = useState(false)
+  const [showMembersList, setShowMembersList] = useState(false)
   const [hasUserChecked, setHasUserChecked] = useState(false)
+  const [channelMembersList, setChannelMembersList] = useState<ChannelMember[]>([])
 
+  // All hooks must be called unconditionally and in the same order every render
   const {
     channels,
     selectedChannel,
@@ -52,8 +60,8 @@ export default function ChatScreen() {
     addMessage,
     updateChannelUnreadCount,
     refresh,
-    addReactionToMessage, // Make sure this is destructured
-    removeReactionFromMessage, // Make sure this is destructured
+    addReactionToMessage,
+    removeReactionFromMessage,
   } = useChatData(user?.id)
 
   const { typingUsers, handleTyping, handleStopTyping } = useTypingIndicator({
@@ -62,7 +70,29 @@ export default function ChatScreen() {
     channelMembers,
   })
 
-  // Realtime subscriptions
+  // This hook must always be called, regardless of conditions
+  useOnlineStatus(user?.id, selectedChannel?.id)
+
+  // Load detailed members list when channel changes
+  useEffect(() => {
+    const loadMembersList = async () => {
+      if (selectedChannel?.id) {
+        try {
+          const members = await fetchChannelMembersList(selectedChannel.id)
+          setChannelMembersList(members)
+        } catch (error) {
+          console.error('Error loading members list:', error)
+        }
+      } else {
+        // Clear members list when no channel is selected
+        setChannelMembersList([])
+      }
+    }
+
+    loadMembersList()
+  }, [selectedChannel?.id])
+
+  // Realtime subscriptions - must be unconditional
   useRealtimeChat({
     channelId: selectedChannel?.id,
     userId: user?.id,
@@ -91,16 +121,34 @@ export default function ChatScreen() {
     onReactionAdded: useCallback((reaction) => {
       if (addReactionToMessage) {
         addReactionToMessage(reaction)
+      } else {
+        // Fallback using updateMessage
+        updateMessage(reaction.message_id, (prevMessage) => {
+          const currentReactions = prevMessage.reactions || []
+          const exists = currentReactions.some(r => r.id === reaction.id)
+          if (!exists) {
+            return {
+              reactions: [...currentReactions, reaction]
+            }
+          }
+          return {}
+        })
       }
-    }, [addReactionToMessage]),
+    }, [addReactionToMessage, updateMessage]),
     onReactionRemoved: useCallback((reactionId, messageId) => {
       if (removeReactionFromMessage) {
         removeReactionFromMessage(reactionId, messageId)
+      } else {
+        // Fallback using updateMessage
+        updateMessage(messageId, (prevMessage) => {
+          const currentReactions = prevMessage.reactions || []
+          return {
+            reactions: currentReactions.filter(r => r.id !== reactionId)
+          }
+        })
       }
-    }, [removeReactionFromMessage]),
+    }, [removeReactionFromMessage, updateMessage]),
   })
-
-  // ... rest of your ChatScreen component remains the same
 
   useEffect(() => {
     if (user?.id) {
@@ -116,6 +164,7 @@ export default function ChatScreen() {
     }
   }, [selectedChannel?.id, user?.id, loadMessages, loadChannelMembers])
 
+  // All useCallback hooks must be declared unconditionally
   const handleChannelSelect = useCallback((channel: Channel) => {
     selectChannel(channel)
     setShowChannelModal(false)
@@ -161,10 +210,8 @@ export default function ChatScreen() {
       )
 
       if (existingReaction) {
-        // Remove reaction if user already reacted with this emoji
         await removeReaction(existingReaction.id)
       } else {
-        // Add new reaction
         await addReaction(messageId, emoji, user.id)
       }
     } catch (error) {
@@ -182,7 +229,15 @@ export default function ChatScreen() {
     return getReadReceiptText(msg, user.id, channelMembers)
   }, [user?.id, channelMembers])
 
-  // Loading state
+  const handleMembersPress = useCallback(() => {
+    setShowMembersList(true)
+  }, [])
+
+  const handleCloseMembers = useCallback(() => {
+    setShowMembersList(false)
+  }, [])
+
+  // Loading state - this is a conditional return, which is allowed
   if (!hasUserChecked || loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -193,7 +248,7 @@ export default function ChatScreen() {
     )
   }
 
-  // Not authenticated
+  // Not authenticated - conditional return
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
@@ -202,7 +257,7 @@ export default function ChatScreen() {
     )
   }
 
-  // Mobile Layout
+  // The rest of your component rendering...
   if (IS_MOBILE) {
     return (
       <SafeAreaView style={styles.container}>
@@ -215,9 +270,18 @@ export default function ChatScreen() {
             channelName={selectedChannel?.name}
             unreadCount={getTotalUnreadCount()}
             onChannelPress={() => setShowChannelModal(true)}
+            onMembersPress={handleMembersPress}
+            memberCount={channelMembersList.length}
           />
 
-          {selectedChannel ? (
+          {showMembersList ? (
+            <MembersList
+              members={channelMembersList}
+              isVisible={showMembersList}
+              onClose={handleCloseMembers}
+              currentUserId={user?.id}
+            />
+          ) : selectedChannel ? (
             <>
               <MessageList
                 messages={messages}
@@ -258,7 +322,7 @@ export default function ChatScreen() {
     )
   }
 
-  // Desktop/Tablet Layout
+  // Desktop layout
   return (
     <KeyboardAvoidingView 
       style={styles.container}
@@ -269,6 +333,8 @@ export default function ChatScreen() {
         channelName={selectedChannel?.name}
         unreadCount={0}
         onChannelPress={() => {}}
+        onMembersPress={handleMembersPress}
+        memberCount={channelMembersList.length}
       />
 
       <View style={styles.content}>
@@ -286,6 +352,8 @@ export default function ChatScreen() {
               <ChatAreaHeader
                 channelName={selectedChannel.name}
                 channelDescription={selectedChannel.description}
+                onMembersPress={handleMembersPress}
+                memberCount={channelMembersList.length}
               />
 
               <MessageList
@@ -315,6 +383,16 @@ export default function ChatScreen() {
             <EmptyState />
           )}
         </View>
+
+        {/* Members List Sidebar for Desktop */}
+        {showMembersList && (
+          <MembersList
+            members={channelMembersList}
+            isVisible={showMembersList}
+            onClose={handleCloseMembers}
+            currentUserId={user?.id}
+          />
+        )}
       </View>
     </KeyboardAvoidingView>
   )

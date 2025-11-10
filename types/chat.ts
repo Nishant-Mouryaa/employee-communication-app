@@ -12,6 +12,8 @@ export interface Profile {
   username: string
   full_name: string
   avatar_url?: string
+  last_seen?: string
+  is_online?: boolean
 }
 
 export interface Reaction {
@@ -50,4 +52,11 @@ export interface ChatState {
   loading: boolean
   sending: boolean
   refreshing: boolean
+}
+
+export interface ChannelMember {
+  user_id: string
+  channel_id: string
+  profiles: Profile
+  joined_at: string
 }

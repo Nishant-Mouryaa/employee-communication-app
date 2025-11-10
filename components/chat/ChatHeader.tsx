@@ -7,12 +7,16 @@ interface ChatHeaderProps {
   channelName?: string
   unreadCount: number
   onChannelPress: () => void
+  onMembersPress: () => void
+  memberCount?: number
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   channelName,
   unreadCount,
-  onChannelPress
+  onChannelPress,
+  onMembersPress,
+  memberCount = 0
 }) => {
   if (IS_MOBILE) {
     return (
@@ -29,6 +33,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               </Text>
             </View>
           )}
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.membersButton} onPress={onMembersPress}>
+          <Text style={styles.membersButtonText}>
+            👥 {memberCount}
+          </Text>
         </TouchableOpacity>
       </View>
     )
@@ -66,6 +76,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   channelButton: {
     flexDirection: 'row',
@@ -74,6 +87,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
+    flex: 1,
+    marginRight: 12,
   },
   channelButtonHash: {
     fontSize: 18,
@@ -86,6 +101,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'white',
     flex: 1,
+  },
+  membersButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  membersButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
   },
   headerUnreadBadge: {
     backgroundColor: '#EF4444',
