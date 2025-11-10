@@ -137,7 +137,9 @@ export const fetchChannelMembersList = async (channelId: string): Promise<Channe
         full_name,
         avatar_url,
         is_online,
-        last_seen
+        last_seen,
+        department,
+        position
       )
     `)
     .eq('channel_id', channelId)

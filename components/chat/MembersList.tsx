@@ -1,3 +1,4 @@
+// components/chat/MembersList.tsx
 import React from 'react'
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, Alert } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
@@ -10,7 +11,7 @@ interface MembersListProps {
   isVisible: boolean
   onClose: () => void
   currentUserId?: string
-  onStartDirectMessage?: (member: ChannelMember) => void // Add this prop
+  onStartDirectMessage?: (member: ChannelMember) => void
 }
 
 export const MembersList: React.FC<MembersListProps> = ({
@@ -22,26 +23,26 @@ export const MembersList: React.FC<MembersListProps> = ({
 }) => {
   if (!isVisible) return null
 
- const handleMemberPress = (member: ChannelMember) => {
-  console.log('=== MembersList: handleMemberPress ===')
-  console.log('Member:', member)
-  console.log('CurrentUserId:', currentUserId)
-  console.log('onStartDirectMessage exists?', !!onStartDirectMessage)
-  
-  if (member.user_id === currentUserId) {
-    Alert.alert('Info', "You can't message yourself")
-    return
+  const handleMemberPress = (member: ChannelMember) => {
+    console.log('=== MembersList: handleMemberPress ===')
+    console.log('Member:', member)
+    console.log('CurrentUserId:', currentUserId)
+    console.log('onStartDirectMessage exists?', !!onStartDirectMessage)
+    
+    if (member.user_id === currentUserId) {
+      Alert.alert('Info', "You can't message yourself")
+      return
+    }
+    
+    if (onStartDirectMessage) {
+      console.log('Calling onStartDirectMessage with member:', member)
+      onStartDirectMessage(member)
+      onClose()
+    } else {
+      console.log('ERROR: onStartDirectMessage is not provided!')
+      Alert.alert('Error', 'Direct messaging is not configured')
+    }
   }
-  
-  if (onStartDirectMessage) {
-    console.log('Calling onStartDirectMessage with member:', member)
-    onStartDirectMessage(member)
-    onClose()
-  } else {
-    console.log('ERROR: onStartDirectMessage is not provided!')
-    Alert.alert('Error', 'Direct messaging is not configured')
-  }
-}
 
   const formatLastSeen = (lastSeen: string | null, isOnline: boolean | null): string => {
     if (isOnline) return 'Online'
@@ -67,6 +68,11 @@ export const MembersList: React.FC<MembersListProps> = ({
     const isCurrentUser = item.user_id === currentUserId
     const displayName = isCurrentUser ? 'You' : item.profiles.full_name || item.profiles.username
     const status = formatLastSeen(item.profiles.last_seen || null, item.profiles.is_online || false)
+    
+    // Get position and department
+    const position = item.profiles.position
+    const department = item.profiles.department
+    const roleInfo = [position, department].filter(Boolean).join(' • ')
 
     return (
       <TouchableOpacity
@@ -97,10 +103,22 @@ export const MembersList: React.FC<MembersListProps> = ({
         </View>
         
         <View style={styles.memberInfo}>
-          <Text style={styles.memberName}>
-            {displayName}
-            {isCurrentUser && <Text style={styles.youBadge}> (you)</Text>}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.memberName}>
+              {displayName}
+              {isCurrentUser && <Text style={styles.youBadge}> (you)</Text>}
+            </Text>
+          </View>
+          
+          {roleInfo && (
+            <View style={styles.roleRow}>
+              <Ionicons name="briefcase-outline" size={12} color="#64748b" style={styles.roleIcon} />
+              <Text style={styles.roleInfo} numberOfLines={1}>
+                {roleInfo}
+              </Text>
+            </View>
+          )}
+          
           <Text style={[
             styles.memberStatus,
             item.profiles.is_online ? styles.statusOnline : styles.statusOffline
@@ -199,15 +217,23 @@ const styles = StyleSheet.create({
   list: {
     flex: 1,
   },
-
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+  },
   avatarContainer: {
     position: 'relative',
     marginRight: 12,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   avatarFallback: {
     backgroundColor: '#6366F1',
@@ -216,7 +242,7 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
   },
   onlineIndicator: {
@@ -237,40 +263,52 @@ const styles = StyleSheet.create({
   },
   memberInfo: {
     flex: 1,
+    justifyContent: 'center',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
   },
   memberName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#334155',
-    marginBottom: 2,
   },
   youBadge: {
     color: '#6366F1',
     fontWeight: '500',
+    fontSize: 14,
+  },
+  roleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  roleIcon: {
+    marginRight: 4,
+  },
+  roleInfo: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '500',
+    flex: 1,
   },
   memberStatus: {
-    fontSize: 13,
+    fontSize: 12,
   },
   statusOnline: {
     color: '#10b981',
     fontWeight: '500',
   },
   statusOffline: {
-    color: '#64748b',
-  },
-  memberItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f8fafc',
-    borderRadius: 8,
-    paddingHorizontal: 8,
+    color: '#94a3b8',
   },
   messageButton: {
     padding: 8,
     borderRadius: 20,
     backgroundColor: '#F3F4F6',
+    marginLeft: 8,
   },
   hint: {
     fontSize: 12,

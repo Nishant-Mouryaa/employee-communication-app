@@ -348,19 +348,23 @@ if (IS_MOBILE) {
           />
         ) : selectedChannel ? (
           <>
-            <MessageList
-              messages={messages}
-              currentUserId={user.id}
-              channelMembers={channelMembers}
-              channelName={selectedChannel.name}
-              refreshing={refreshing}
-              onRefresh={refresh}
-              onDeleteMessage={handleDeleteMessage}
-              onEditMessage={handleEditMessage}
-              onReaction={handleReaction}
-              onReply={handleReply}
-              getReadReceiptText={getMessageReadReceiptText}
-            />
+         <MessageList
+  messages={messages}
+  currentUserId={user.id}
+  channelMembers={channelMembers}
+  channelName={
+    selectedChannel.type === 'direct' && selectedChannel.dm_user
+      ? `${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
+      : selectedChannel.name
+  }
+  refreshing={refreshing}
+  onRefresh={refresh}
+  onDeleteMessage={handleDeleteMessage}
+  onEditMessage={handleEditMessage}
+  onReaction={handleReaction}
+  onReply={handleReply}
+  getReadReceiptText={getMessageReadReceiptText}
+/>
 
             <TypingIndicator typingUsers={typingUsers} />
             
@@ -442,17 +446,21 @@ if (IS_MOBILE) {
   dmUser={selectedChannel?.dm_user}
 />
 
-              <MessageList
-                messages={messages}
-                currentUserId={user.id}
-                channelMembers={channelMembers}
-                channelName={selectedChannel.name}
-                refreshing={refreshing}
-                onRefresh={refresh}
-                onDeleteMessage={handleDeleteMessage}
-                onReaction={handleReaction}
-                getReadReceiptText={getMessageReadReceiptText}
-              />
+           <MessageList
+  messages={messages}
+  currentUserId={user.id}
+  channelMembers={channelMembers}
+  channelName={
+    selectedChannel.type === 'direct' && selectedChannel.dm_user
+      ? `${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
+      : selectedChannel.name
+  }
+  refreshing={refreshing}
+  onRefresh={refresh}
+  onDeleteMessage={handleDeleteMessage}
+  onReaction={handleReaction}
+  getReadReceiptText={getMessageReadReceiptText}
+/>
 
               <TypingIndicator typingUsers={typingUsers} />
 

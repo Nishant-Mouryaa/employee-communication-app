@@ -16,6 +16,8 @@ export interface Profile {
   avatar_url?: string
   last_seen?: string
   is_online?: boolean
+    department?: string      // Add this
+  position?: string
 }
 
 export interface Reaction {

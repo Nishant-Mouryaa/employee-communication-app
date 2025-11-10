@@ -12,7 +12,9 @@ export const fetchMessages = async (channelId: string) => {
         id,
         username,
         full_name,
-        avatar_url
+        avatar_url,
+         department,
+        position
       )
     `)
     .eq('channel_id', channelId)
