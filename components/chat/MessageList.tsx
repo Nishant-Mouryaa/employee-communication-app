@@ -14,10 +14,10 @@ interface MessageListProps {
   refreshing: boolean
   onRefresh: () => void
   onDeleteMessage: (messageId: string, isOwn: boolean) => void
+  onEditMessage?: (messageId: string, newContent: string) => void
   onReaction: (messageId: string, emoji: string) => void
   getReadReceiptText: (message: Message) => string
 }
-
 
 export const MessageList: React.FC<MessageListProps> = ({
   messages,
@@ -27,6 +27,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   refreshing,
   onRefresh,
   onDeleteMessage,
+  onEditMessage,
   onReaction,
   getReadReceiptText
 }) => {
@@ -42,7 +43,19 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   const isOwnMessage = (messageUserId: string) => messageUserId === currentUserId
 
-const renderItem = ({ item, index }: { item: Message; index: number }) => {
+  const handleDelete = (messageId: string) => {
+    onDeleteMessage(messageId, true)
+  }
+
+  const handleEdit = (messageId: string, content: string) => {
+    if (onEditMessage) {
+      // You might want to show an edit modal/input here
+      // For now, we'll just pass it through
+      onEditMessage(messageId, content)
+    }
+  }
+
+  const renderItem = ({ item, index }: { item: Message; index: number }) => {
     const previousMessage = index > 0 ? messages[index - 1] : null
     const showDateHeader = shouldShowDateHeader(item, previousMessage)
 
@@ -60,6 +73,8 @@ const renderItem = ({ item, index }: { item: Message; index: number }) => {
           isOwn={isOwnMessage(item.user_id)}
           onLongPress={() => onDeleteMessage(item.id, isOwnMessage(item.user_id))}
           onReaction={onReaction}
+          onDelete={handleDelete}
+          onEdit={handleEdit}
           readReceiptText={getReadReceiptText(item)}
           showReadReceipt={!item.id.startsWith('temp-')}
           currentUserId={currentUserId}
@@ -67,6 +82,7 @@ const renderItem = ({ item, index }: { item: Message; index: number }) => {
       </View>
     )
   }
+
   return (
     <FlatList
       ref={flatListRef}

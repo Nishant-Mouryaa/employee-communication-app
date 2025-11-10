@@ -1,17 +1,20 @@
 // components/chat/MessageBubble.tsx
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, Pressable } from 'react-native'
+import { View, Text, StyleSheet, Pressable, Clipboard } from 'react-native'
 import { Message } from '../../types/chat'
 import { formatMessageTimestamp, getUserInitials } from '../../utils/chatHelpers'
 import { IS_MOBILE } from '../../constants/chat'
 import { MessageReactions } from './MessageReactions'
 import { ReactionPicker } from './ReactionPicker'
+import { MessageContextMenu } from './MessageContextMenu'
 
 interface MessageBubbleProps {
   message: Message
   isOwn: boolean
   onLongPress: () => void
   onReaction: (messageId: string, emoji: string) => void
+  onDelete?: (messageId: string) => void
+  onEdit?: (messageId: string, content: string) => void
   readReceiptText?: string
   showReadReceipt?: boolean
   currentUserId?: string
@@ -22,26 +25,85 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   isOwn,
   onLongPress,
   onReaction,
+  onDelete,
+  onEdit,
   readReceiptText,
   showReadReceipt,
   currentUserId
 }) => {
+  const [showContextMenu, setShowContextMenu] = useState(false)
   const [showReactionPicker, setShowReactionPicker] = useState(false)
-  const [pickerPosition, setPickerPosition] = useState({ x: 0, y: 0 })
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 })
 
   const handleLongPress = (event: any) => {
     const { pageX, pageY } = event.nativeEvent
-    setPickerPosition({ x: pageX, y: pageY })
-    setShowReactionPicker(true)
+    setMenuPosition({ x: pageX, y: pageY })
+    setShowContextMenu(true)
   }
 
   const handleReactionSelect = (emoji: string) => {
     onReaction(message.id, emoji)
+    setShowReactionPicker(false)
   }
 
   const handleReactionPress = (emoji: string) => {
     onReaction(message.id, emoji)
   }
+
+  const handleCopy = () => {
+    Clipboard.setString(message.content)
+  }
+
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete(message.id)
+    }
+  }
+
+  const handleEdit = () => {
+    if (onEdit) {
+      onEdit(message.id, message.content)
+    }
+  }
+
+  // Determine read status
+  const getReadStatus = () => {
+    if (!isOwn || !showReadReceipt) return null
+    
+    // Temporary message (not yet sent)
+    if (message.id.startsWith('temp-')) {
+      return { icon: '🕐', color: 'rgba(255, 255, 255, 0.5)', label: 'Sending' }
+    }
+    
+    // Check if message has been read by others (excluding the sender)
+    const readByOthers = message.read_by?.filter(userId => userId !== currentUserId) || []
+    const hasBeenRead = readByOthers.length > 0
+    
+    // Also check read_count as a backup
+    const readCount = message.read_count || 0
+    
+    // Log for debugging
+    console.log('Read status for message:', message.id, {
+      read_by: message.read_by,
+      read_count: message.read_count,
+      readByOthers,
+      hasBeenRead,
+      readReceiptText
+    })
+    
+    if (hasBeenRead || readCount > 0) {
+      return { 
+        icon: '✓✓', 
+        color: '#4ade80', // Green color
+        label: readReceiptText || `Read by ${readByOthers.length || readCount}` 
+      }
+    }
+    
+    // Delivered but not read (grey ticks)
+    return { icon: '✓✓', color: 'rgba(255, 255, 255, 0.7)', label: 'Delivered' }
+  }
+
+  const readStatus = getReadStatus()
 
   return (
     <>
@@ -87,25 +149,44 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 <Text style={[styles.messageTime, isOwn && styles.ownMessageTime]}>
                   {formatMessageTimestamp(message.created_at)}
                 </Text>
-                {isOwn && showReadReceipt && readReceiptText && (
-                  <View style={styles.readReceiptContainer}>
-                    <Text style={styles.readReceiptText}>{readReceiptText}</Text>
-                    {message.read_count && message.read_count > 0 && (
-                      <Text style={styles.readReceiptCheckmark}>✓✓</Text>
-                    )}
+                
+                {/* Read Status with Ticks */}
+                {readStatus && (
+                  <View style={styles.readStatusContainer}>
+                    <Text style={[styles.readStatusIcon, { color: readStatus.color }]}>
+                      {readStatus.icon}
+                    </Text>
                   </View>
                 )}
               </View>
+              
+              {/* Optional: Show detailed read info */}
+              {isOwn && showReadReceipt && readReceiptText && (message.read_count ?? 0) > 0 && (
+                <Text style={styles.readReceiptDetail}>{readReceiptText}</Text>
+              )}
             </View>
           </View>
         </View>
       </Pressable>
 
+      {/* Context Menu */}
+      <MessageContextMenu
+        visible={showContextMenu}
+        onClose={() => setShowContextMenu(false)}
+        position={menuPosition}
+        isOwnMessage={isOwn}
+        onReact={() => setShowReactionPicker(true)}
+        onCopy={handleCopy}
+        onEdit={isOwn ? handleEdit : undefined}
+        onDelete={isOwn ? handleDelete : undefined}
+      />
+
+      {/* Reaction Picker */}
       <ReactionPicker
         visible={showReactionPicker}
         onReactionSelect={handleReactionSelect}
         onClose={() => setShowReactionPicker(false)}
-        position={pickerPosition}
+        position={menuPosition}
       />
     </>
   )
@@ -180,8 +261,9 @@ const styles = StyleSheet.create({
   messageFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     marginTop: 4,
+    gap: 6,
   },
   messageTime: {
     fontSize: 11,
@@ -190,19 +272,20 @@ const styles = StyleSheet.create({
   ownMessageTime: {
     color: 'rgba(255, 255, 255, 0.7)',
   },
-  readReceiptContainer: {
+  readStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
   },
-  readReceiptText: {
-    fontSize: 10,
+  readStatusIcon: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 14,
+  },
+  readReceiptDetail: {
+    fontSize: 9,
     color: 'rgba(255, 255, 255, 0.6)',
     fontStyle: 'italic',
-  },
-  readReceiptCheckmark: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginLeft: 4,
+    marginTop: 2,
+    textAlign: 'right',
   },
 })
