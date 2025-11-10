@@ -1,0 +1,11 @@
+// components/chat/index.ts
+export { ChatHeader } from './ChatHeader'
+export { ChannelList } from './ChannelList'
+export { MessageBubble } from './MessageBubble'
+export { MessageList } from './MessageList'
+export { MessageInput } from './MessageInput'
+export { TypingIndicator } from './TypingIndicator'
+export { ChannelModal } from './ChannelModal'
+export { EmptyState } from './EmptyState'
+export { ChatAreaHeader } from './ChatAreaHeader'
+export { LoadingState } from './LoadingState'
