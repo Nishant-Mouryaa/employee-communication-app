@@ -1,9 +1,33 @@
 // components/chat/ChannelList.tsx
-import React from 'react'
+import React, { useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Channel } from '../../types/chat'
 import { getUserInitials } from '../../utils/chatHelpers'
+
+type FilterType = 'all' | 'groups' | 'personal'
+
+const FilterButton = ({ 
+  type, 
+  isActive, 
+  onPress, 
+  label 
+}: { 
+  type: FilterType
+  isActive: boolean
+  onPress: (type: FilterType) => void
+  label: string
+}) => (
+  <TouchableOpacity
+    style={[styles.filterButton, isActive && styles.filterButtonActive]}
+    onPress={() => onPress(type)}
+    activeOpacity={0.7}
+  >
+    <Text style={[styles.filterButtonText, isActive && styles.filterButtonTextActive]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+)
 
 const ChannelItem = ({ 
   channel, 
@@ -156,6 +180,8 @@ export const ChannelList: React.FC<{
   refreshing?: boolean
   onRefresh?: () => void
 }> = ({ channels, selectedChannelId, onChannelSelect, refreshing, onRefresh }) => {
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
+
   // Remove duplicates based on channel ID
   const uniqueChannels = React.useMemo(() => {
     const seen = new Set()
@@ -172,35 +198,104 @@ export const ChannelList: React.FC<{
   const regularChannels = uniqueChannels.filter(c => c.type !== 'direct')
   const directMessages = uniqueChannels.filter(c => c.type === 'direct')
 
+  // Filter channels based on active filter
+  const filteredChannels = React.useMemo(() => {
+    switch (activeFilter) {
+      case 'groups':
+        return regularChannels
+      case 'personal':
+        return directMessages
+      case 'all':
+      default:
+        return [...regularChannels, ...directMessages]
+    }
+  }, [activeFilter, regularChannels, directMessages])
+
   // Sort by last message timestamp (most recent first)
-  const sortedChannels = [...regularChannels, ...directMessages].sort((a, b) => {
-    const timeA = a.last_message ? new Date(a.last_message.created_at).getTime() : 0
-    const timeB = b.last_message ? new Date(b.last_message.created_at).getTime() : 0
-    return timeB - timeA
-  })
+  const sortedChannels = React.useMemo(() => {
+    return filteredChannels.sort((a, b) => {
+      const timeA = a.last_message ? new Date(a.last_message.created_at).getTime() : 0
+      const timeB = b.last_message ? new Date(b.last_message.created_at).getTime() : 0
+      return timeB - timeA
+    })
+  }, [filteredChannels])
+
+  // Get counts for filter buttons
+  const allCount = regularChannels.length + directMessages.length
+  const groupsCount = regularChannels.length
+  const personalCount = directMessages.length
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={sortedChannels}
-        renderItem={({ item }) => (
-          <ChannelItem
-            channel={item}
-            isSelected={item.id === selectedChannelId}
-            onSelect={() => onChannelSelect(item)}
+      {/* Filter Buttons */}
+      <View style={styles.filterContainer}>
+        <FilterButton
+          type="all"
+          isActive={activeFilter === 'all'}
+          onPress={setActiveFilter}
+          label={`All (${allCount})`}
+        />
+        <FilterButton
+          type="groups"
+          isActive={activeFilter === 'groups'}
+          onPress={setActiveFilter}
+          label={`Groups (${groupsCount})`}
+        />
+        <FilterButton
+          type="personal"
+          isActive={activeFilter === 'personal'}
+          onPress={setActiveFilter}
+          label={`Personal (${personalCount})`}
+        />
+      </View>
+
+      {/* Empty State */}
+      {sortedChannels.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons 
+            name={activeFilter === 'groups' ? "people-outline" : "chatbubble-outline"} 
+            size={64} 
+            color="#cbd5e1" 
           />
-        )}
-        keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing || false}
-            onRefresh={onRefresh}
-            tintColor="#6366F1"
-          />
-        }
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-      />
+          <Text style={styles.emptyStateTitle}>
+            {activeFilter === 'groups' 
+              ? 'No group chats' 
+              : activeFilter === 'personal' 
+              ? 'No personal chats' 
+              : 'No conversations'
+            }
+          </Text>
+          <Text style={styles.emptyStateSubtitle}>
+            {activeFilter === 'groups' 
+              ? 'Group chats will appear here when available' 
+              : activeFilter === 'personal' 
+              ? 'Start a conversation to see personal chats here' 
+              : 'Start a conversation to see chats here'
+            }
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={sortedChannels}
+          renderItem={({ item }) => (
+            <ChannelItem
+              channel={item}
+              isSelected={item.id === selectedChannelId}
+              onSelect={() => onChannelSelect(item)}
+            />
+          )}
+          keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing || false}
+              onRefresh={onRefresh}
+              tintColor="#6366F1"
+            />
+          }
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+        />
+      )}
     </View>
   )
 }
@@ -209,6 +304,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#f8fafc',
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginRight: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: '#6366F1',
+    borderColor: '#6366F1',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  filterButtonTextActive: {
+    color: 'white',
   },
   listContent: {
     paddingTop: 8,
@@ -320,5 +446,24 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 11,
     fontWeight: '700',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateSubtitle: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 })
