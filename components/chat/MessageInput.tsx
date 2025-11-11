@@ -1,9 +1,10 @@
 // components/chat/MessageInput.tsx
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { View, TextInput, TouchableOpacity, StyleSheet, Text, ActivityIndicator, Platform } from 'react-native'
 import { IS_MOBILE, MESSAGE_MAX_LENGTH } from '../../constants/chat'
-import { Message } from '../../types/chat'
+import { Message, Profile } from '../../types/chat'
 import { ReplyPreview } from './ReplyPreview'
+import { MentionList } from './MentionList'
 
 interface MessageInputProps {
   value: string
@@ -14,6 +15,7 @@ interface MessageInputProps {
   onTyping: () => void
   replyingTo?: Message | null
   onCancelReply?: () => void
+  channelMembers?: Map<string, Profile>  // Add this
 }
 
 export const MessageInput: React.FC<MessageInputProps> = ({
@@ -25,17 +27,72 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   onTyping,
   replyingTo,
   onCancelReply,
+  channelMembers,
 }) => {
+  const [showMentions, setShowMentions] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [cursorPosition, setCursorPosition] = useState(0)
+
+  // Detect @ mentions
+  useEffect(() => {
+    const textBeforeCursor = value.substring(0, cursorPosition)
+    const atMatch = textBeforeCursor.match(/@(\w*)$/)
+    
+    if (atMatch) {
+      setShowMentions(true)
+      setMentionQuery(atMatch[1])
+    } else {
+      setShowMentions(false)
+      setMentionQuery('')
+    }
+  }, [value, cursorPosition])
+
   const handleChangeText = (text: string) => {
     onChangeText(text)
     onTyping()
   }
 
+  const handleSelectionChange = (event: any) => {
+    setCursorPosition(event.nativeEvent.selection.start)
+  }
+
+  const handleSelectMention = (member: Profile) => {
+    const textBeforeCursor = value.substring(0, cursorPosition)
+    const textAfterCursor = value.substring(cursorPosition)
+    
+    // Find the @ symbol position
+    const atIndex = textBeforeCursor.lastIndexOf('@')
+    
+    if (atIndex !== -1) {
+      // Replace from @ to cursor with the mention
+      const beforeAt = textBeforeCursor.substring(0, atIndex)
+      const mention = `@${member.username} `
+      const newText = beforeAt + mention + textAfterCursor
+      
+      onChangeText(newText)
+      setShowMentions(false)
+      
+      // Set cursor position after the mention
+      setTimeout(() => {
+        setCursorPosition(beforeAt.length + mention.length)
+      }, 0)
+    }
+  }
+
   const canSend = value.trim() && !sending
+
+  const members = channelMembers ? Array.from(channelMembers.values()) : []
 
   if (IS_MOBILE) {
     return (
       <View style={styles.inputWrapperMobile}>
+        {showMentions && members.length > 0 && (
+          <MentionList
+            members={members}
+            onSelectMention={handleSelectMention}
+            searchQuery={mentionQuery}
+          />
+        )}
         {replyingTo && (
           <View style={styles.replyPreviewContainer}>
             <ReplyPreview
@@ -49,6 +106,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             style={styles.textInputMobile}
             value={value}
             onChangeText={handleChangeText}
+            onSelectionChange={handleSelectionChange}
             placeholder={placeholder}
             placeholderTextColor="#999"
             multiline
@@ -73,6 +131,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   return (
     <View style={styles.inputWrapper}>
+      {showMentions && members.length > 0 && (
+        <MentionList
+          members={members}
+          onSelectMention={handleSelectMention}
+          searchQuery={mentionQuery}
+        />
+      )}
       {replyingTo && (
         <View style={styles.replyPreviewContainer}>
           <ReplyPreview
@@ -86,6 +151,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           style={styles.textInput}
           value={value}
           onChangeText={handleChangeText}
+          onSelectionChange={handleSelectionChange}
           placeholder={placeholder}
           placeholderTextColor="#999"
           multiline

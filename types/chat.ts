@@ -44,6 +44,7 @@ export interface Message {
   reply_message?: Message
   edited_at?: string
   is_edited?: boolean
+  mentions?: string[]
 }
 
 export interface TypingUser {

@@ -94,42 +94,47 @@ export const addUserToDefaultChannels = async (userId: string): Promise<void> =>
 
 
 
-export const fetchChannelMembers = async (channelId: string): Promise<Map<string, ChannelMember>> => {
+export const fetchChannelMembers = async (channelId: string): Promise<Map<string, Profile>> => {
   const { data, error } = await supabase
     .from('channel_members')
     .select(`
       user_id,
-      channel_id,
-      joined_at,
       profiles!inner (
         id,
         username,
         full_name,
         avatar_url,
+        last_seen,
         is_online,
-        last_seen
+        department,
+        position
       )
     `)
     .eq('channel_id', channelId)
-    .order('joined_at', { ascending: true })
 
   if (error) throw error
 
-  const membersMap = new Map()
+  const membersMap = new Map<string, Profile>()
+  
   data?.forEach(member => {
     if (member.profiles) {
-      membersMap.set(member.user_id, {
-        user_id: member.user_id,
-        channel_id: member.channel_id,
-        joined_at: member.joined_at,
-        profiles: member.profiles
-      })
+      // Ensure we have a proper profile object with all fields
+      const profile: Profile = {
+        id: member.profiles.id || member.user_id,
+        username: member.profiles.username || 'unknown',
+        full_name: member.profiles.full_name || member.profiles.username || 'Unknown User',
+        avatar_url: member.profiles.avatar_url,
+        last_seen: member.profiles.last_seen,
+        is_online: member.profiles.is_online,
+        department: member.profiles.department,
+        position: member.profiles.position
+      }
+      membersMap.set(member.user_id, profile)
     }
   })
-  
+
   return membersMap
 }
-
 // Add a function to get detailed member info
 export const fetchChannelMembersList = async (channelId: string): Promise<ChannelMember[]> => {
   const { data, error } = await supabase

@@ -85,16 +85,30 @@ export const fetchMessages = async (channelId: string) => {
   return messagesWithReactionsAndReads
 }
 
+
 export const sendMessage = async (
   content: string,
   channelId: string,
   userId: string,
   replyToId?: string
 ): Promise<Message> => {
+  // Extract mentions from content
+  const mentionMatches = content.matchAll(/@(\w+)/g)
+  const mentionedUsernames = Array.from(mentionMatches, m => m[1])
+  
+  // Fetch user IDs for mentioned usernames
+  const { data: mentionedUsers } = await supabase
+    .from('profiles')
+    .select('id')
+    .in('username', mentionedUsernames)
+  
+  const mentionedUserIds = mentionedUsers?.map(u => u.id) || []
+
   const messageData: any = {
     content,
     channel_id: channelId,
     user_id: userId,
+    mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null
   }
 
   if (replyToId) {

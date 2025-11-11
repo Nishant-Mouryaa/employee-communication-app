@@ -381,6 +381,7 @@ if (IS_MOBILE) {
   onTyping={handleTyping}
   replyingTo={replyingTo}
   onCancelReply={handleCancelReply}
+   channelMembers={channelMembers}
 />
           </>
         ) : (
@@ -475,6 +476,7 @@ if (IS_MOBILE) {
   }
   sending={sending}
   onTyping={handleTyping}
+   channelMembers={channelMembers}
 />
             </>
           ) : (

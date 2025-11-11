@@ -8,6 +8,7 @@ import { MessageReactions } from './MessageReactions'
 import { ReactionPicker } from './ReactionPicker'
 import { MessageContextMenu } from './MessageContextMenu'
 import { ReplyPreview } from './ReplyPreview'
+import { MessageText } from './MessageText'
 
 interface MessageBubbleProps {
   message: Message
@@ -144,12 +145,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   />
                 )}
 
-                <Text style={[
-                  styles.messageText,
-                  isOwn ? styles.ownMessageText : styles.otherMessageText
-                ]}>
-                  {message.content}
-                </Text>
+                <MessageText content={message.content} style={styles.messageText} />
                 
                 <View style={styles.messageFooter}>
   <Text style={[styles.messageTime, isOwn && styles.ownMessageTime]}>
