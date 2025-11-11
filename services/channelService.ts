@@ -4,28 +4,35 @@ import { Channel, ChannelMember } from '../types/chat'
 import { DEFAULT_CHANNELS } from '../constants/chat'
 
 export const fetchChannels = async (userId: string): Promise<Channel[]> => {
-  const { data: memberData, error: memberError } = await supabase
+  const { data: memberChannels, error } = await supabase
     .from('channel_members')
-    .select('channel_id')
+    .select(`
+      channel_id,
+      channels!inner(*)
+    `)
     .eq('user_id', userId)
+    .neq('channels.type', 'direct')
 
-  if (memberError) throw memberError
+  if (error) throw error
 
-  if (!memberData || memberData.length === 0) {
-    return []
-  }
-
-  const channelIds = memberData.map(member => member.channel_id)
+  const channels = memberChannels?.map(mc => mc.channels) || []
   
-  const { data: channelsData, error: channelsError } = await supabase
-    .from('channels')
-    .select('*')
-    .in('id', channelIds)
-    .order('name')
+  // Fetch member counts for each channel
+  const channelsWithCounts = await Promise.all(
+    channels.map(async (channel) => {
+      const { count } = await supabase
+        .from('channel_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('channel_id', channel.id)
+      
+      return {
+        ...channel,
+        member_count: count || 0
+      }
+    })
+  )
 
-  if (channelsError) throw channelsError
-
-  return channelsData || []
+  return channelsWithCounts
 }
 
 export const fetchChannelUnreadCounts = async (
@@ -136,8 +143,8 @@ export const fetchChannelMembersList = async (channelId: string): Promise<Channe
         username,
         full_name,
         avatar_url,
-        is_online,
         last_seen,
+        is_online,
         department,
         position
       )

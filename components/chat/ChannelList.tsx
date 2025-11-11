@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons'
 import { Channel } from '../../types/chat'
 import { getUserInitials } from '../../utils/chatHelpers'
 
-
 const ChannelItem = ({ 
   channel, 
   isSelected, 
@@ -49,12 +48,23 @@ const ChannelItem = ({
         </View>
         
         <View style={styles.channelInfo}>
-          <Text style={[styles.channelName, isSelected && styles.selectedText]}>
-            {displayName}
-          </Text>
-         // components/chat/ChannelList.tsx (continued)
-          {isDM && channel.dm_user?.is_online && (
-            <View style={styles.onlineIndicator} />
+          <View style={styles.channelNameRow}>
+            <Text style={[styles.channelName, isSelected && styles.selectedText]} numberOfLines={1}>
+              {displayName}
+            </Text>
+            {isDM && channel.dm_user?.is_online && (
+              <View style={styles.onlineIndicator} />
+            )}
+          </View>
+          
+          {/* Show member count for regular channels, not DMs */}
+          {!isDM && channel.member_count !== undefined && (
+            <View style={styles.memberCountRow}>
+              <Ionicons name="people" size={12} color="#94a3b8" />
+              <Text style={styles.memberCountText}>
+                {channel.member_count} {channel.member_count === 1 ? 'member' : 'members'}
+              </Text>
+            </View>
           )}
         </View>
         
@@ -68,7 +78,6 @@ const ChannelItem = ({
   )
 }
 
-// components/chat/ChannelList.tsx
 export const ChannelList: React.FC<{
   channels: Channel[]
   selectedChannelId?: string
@@ -195,6 +204,8 @@ const styles = StyleSheet.create({
   },
   channelInfo: {
     flex: 1,
+  },
+  channelNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -202,10 +213,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#334155',
     fontWeight: '500',
+    flex: 1,
   },
   selectedText: {
     color: '#4f46e5',
     fontWeight: '600',
+  },
+  memberCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 4,
+  },
+  memberCountText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '500',
   },
   onlineIndicator: {
     width: 8,

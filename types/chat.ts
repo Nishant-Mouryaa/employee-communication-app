@@ -7,6 +7,7 @@ export interface Channel {
   created_at: string
   type?: 'channel' | 'direct' // Add channel type
   dm_user?: Profile // For DMs, store the other user's profile
+  member_count?: number // Number of members in the channel
 }
 
 export interface Profile {

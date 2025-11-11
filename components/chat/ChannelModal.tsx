@@ -1,6 +1,7 @@
 // components/chat/ChannelModal.tsx
 import React from 'react'
 import { Modal, View, Text, StyleSheet, Pressable, TouchableOpacity, FlatList, Platform } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { Channel } from '../../types/chat'
 
 interface ChannelModalProps {
@@ -18,6 +19,9 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
   onClose,
   onSelectChannel
 }) => {
+  // Filter out DM channels from modal
+  const regularChannels = channels.filter(c => c.type !== 'direct')
+
   return (
     <Modal
       visible={visible}
@@ -34,7 +38,7 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
             </TouchableOpacity>
           </View>
           <FlatList
-            data={channels}
+            data={regularChannels}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <TouchableOpacity
@@ -56,12 +60,32 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
                     ]}>
                       {item.name}
                     </Text>
-                    <Text style={[
-                      styles.channelDescriptionSmall,
-                      selectedChannelId === item.id && styles.selectedChannelText
-                    ]}>
-                      {item.description}
-                    </Text>
+                    <View style={styles.channelMetaRow}>
+                      <Text style={[
+                        styles.channelDescriptionSmall,
+                        selectedChannelId === item.id && styles.selectedChannelText
+                      ]}>
+                        {item.description}
+                      </Text>
+                      {item.member_count !== undefined && (
+                        <>
+                          <Text style={styles.metaSeparator}>•</Text>
+                          <View style={styles.memberCountInline}>
+                            <Ionicons 
+                              name="people" 
+                              size={12} 
+                              color={selectedChannelId === item.id ? '#6366F1' : '#94a3b8'} 
+                            />
+                            <Text style={[
+                              styles.memberCountTextSmall,
+                              selectedChannelId === item.id && styles.selectedChannelText
+                            ]}>
+                              {item.member_count}
+                            </Text>
+                          </View>
+                        </>
+                      )}
+                    </View>
                   </View>
                 </View>
                 {item.unread_count > 0 && (
@@ -142,10 +166,29 @@ const styles = StyleSheet.create({
   selectedChannelText: {
     color: '#6366F1',
   },
+  channelMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 6,
+  },
   channelDescriptionSmall: {
     fontSize: 12,
     color: '#94a3b8',
-    marginTop: 2,
+  },
+  metaSeparator: {
+    fontSize: 12,
+    color: '#cbd5e1',
+  },
+  memberCountInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  memberCountTextSmall: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '500',
   },
   unreadBadge: {
     backgroundColor: '#EF4444',
