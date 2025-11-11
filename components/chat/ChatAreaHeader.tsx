@@ -17,6 +17,8 @@ interface ChatAreaHeaderProps {
     is_online?: boolean
     last_seen?: string
   }
+  onBack?: () => void // Add back button support
+  showBackButton?: boolean // Add back button support
 }
 
 export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
@@ -25,7 +27,9 @@ export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
   memberCount = 0,
   onInfoPress,
   isDM = false,
-  dmUser
+  dmUser,
+  onBack,
+  showBackButton = false
 }) => {
   const formatLastSeen = (lastSeen?: string, isOnline?: boolean) => {
     if (isOnline) return 'Active now'
@@ -44,6 +48,16 @@ export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
     return (
       <View style={styles.chatHeader}>
         <View style={styles.dmHeader}>
+          {/* Back Button */}
+          {showBackButton && onBack && (
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={onBack}
+            >
+              <Ionicons name="chevron-back" size={24} color="#6366F1" />
+            </TouchableOpacity>
+          )}
+          
           <View style={styles.dmUserInfo}>
             {dmUser.avatar_url ? (
               <Image source={{ uri: dmUser.avatar_url }} style={styles.dmAvatar} />
@@ -78,11 +92,21 @@ export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
     )
   }
 
-  // Original channel header
+  // Original channel header with back button
   return (
     <View style={styles.chatHeader}>
       <View style={styles.channelHeader}>
         <View style={styles.channelTitleRow}>
+          {/* Back Button */}
+          {showBackButton && onBack && (
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={onBack}
+            >
+              <Ionicons name="chevron-back" size={24} color="#6366F1" />
+            </TouchableOpacity>
+          )}
+          
           <Text style={styles.channelTitle}>#{channelName}</Text>
           
           <View style={styles.headerActions}>
@@ -120,6 +144,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
+  },
+  backButton: {
+    padding: 4,
+    marginRight: 12,
   },
   channelHeader: {
     flexDirection: 'column',

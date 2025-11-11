@@ -18,6 +18,8 @@ interface ChatHeaderProps {
     avatar_url?: string
     is_online?: boolean
   }
+  showBackButton?: boolean // New prop for back button
+  onBackPress?: () => void // New prop for back button press
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -27,7 +29,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onMembersPress,
   memberCount,
   isDM = false,
-  dmUser
+  dmUser,
+  showBackButton = false, // Default to false
+  onBackPress // Back button handler
 }) => {
   const displayName = isDM && dmUser 
     ? dmUser.full_name || dmUser.username 
@@ -35,50 +39,64 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity 
-        style={styles.channelButton}
-        onPress={onChannelPress}
-        activeOpacity={0.7}
-      >
-        {isDM && dmUser ? (
-          // DM Header
-          <View style={styles.dmHeader}>
-            {dmUser.avatar_url ? (
-              <Image source={{ uri: dmUser.avatar_url }} style={styles.dmAvatar} />
-            ) : (
-              <View style={styles.dmAvatarFallback}>
-                <Text style={styles.dmInitials}>
-                  {getUserInitials(dmUser.full_name || dmUser.username)}
+      {/* Left Section - Back Button and Channel Info */}
+      <View style={styles.leftSection}>
+        {showBackButton && (
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={onBackPress}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={24} color="#6366F1" />
+          </TouchableOpacity>
+        )}
+        
+        <TouchableOpacity 
+          style={styles.channelButton}
+          onPress={onChannelPress}
+          activeOpacity={0.7}
+        >
+          {isDM && dmUser ? (
+            // DM Header
+            <View style={styles.dmHeader}>
+              {dmUser.avatar_url ? (
+                <Image source={{ uri: dmUser.avatar_url }} style={styles.dmAvatar} />
+              ) : (
+                <View style={styles.dmAvatarFallback}>
+                  <Text style={styles.dmInitials}>
+                    {getUserInitials(dmUser.full_name || dmUser.username)}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.dmInfo}>
+                <Text style={styles.channelName} numberOfLines={1}>
+                  {displayName}
                 </Text>
+                {dmUser.is_online && (
+                  <View style={styles.onlineStatusRow}>
+                    <View style={styles.onlineIndicator} />
+                    <Text style={styles.onlineText}>Active now</Text>
+                  </View>
+                )}
               </View>
-            )}
-            <View style={styles.dmInfo}>
+            </View>
+          ) : (
+            // Regular Channel Header
+            <>
+              <Text style={styles.hashIcon}>#</Text>
               <Text style={styles.channelName} numberOfLines={1}>
                 {displayName}
               </Text>
-              {dmUser.is_online && (
-                <View style={styles.onlineStatusRow}>
-                  <View style={styles.onlineIndicator} />
-                  <Text style={styles.onlineText}>Active now</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        ) : (
-          // Regular Channel Header
-          <>
-            <Text style={styles.hashIcon}>#</Text>
-            <Text style={styles.channelName} numberOfLines={1}>
-              {displayName}
-            </Text>
-          </>
-        )}
-        
-        {!isDM && IS_MOBILE && (
-          <Ionicons name="chevron-down" size={20} color="#64748b" />
-        )}
-      </TouchableOpacity>
+            </>
+          )}
+          
+          {!isDM && IS_MOBILE && (
+            <Ionicons name="chevron-down" size={20} color="#64748b" />
+          )}
+        </TouchableOpacity>
+      </View>
 
+      {/* Right Section - Actions */}
       <View style={styles.actions}>
         {onMembersPress && !isDM && memberCount !== undefined && (
           <TouchableOpacity 
@@ -114,11 +132,20 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e2e8f0',
     height: 56,
   },
-  channelButton: {
+  leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
     marginRight: 12,
+  },
+  backButton: {
+    padding: 4,
+    marginRight: 8,
+  },
+  channelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   dmHeader: {
     flexDirection: 'row',

@@ -19,61 +19,132 @@ const ChannelItem = ({
     ? channel.dm_user.full_name || channel.dm_user.username
     : channel.name
 
+  // Get position and department for DMs
+  const position = isDM ? channel.dm_user?.position : null
+  const department = isDM ? channel.dm_user?.department : null
+  const roleInfo = [position, department].filter(Boolean).join(' • ')
+
+  // For group channels, show member avatars or channel icon
+  const getChannelAvatar = () => {
+    if (isDM) {
+      // DM avatar
+      if (channel.dm_user?.avatar_url) {
+        return (
+          <Image 
+            source={{ uri: channel.dm_user.avatar_url }} 
+            style={styles.avatar}
+          />
+        )
+      } else {
+        return (
+          <View style={[styles.avatar, styles.avatarFallback]}>
+            <Text style={styles.avatarText}>
+              {getUserInitials(displayName)}
+            </Text>
+          </View>
+        )
+      }
+    } else {
+      // Group channel avatar - show first letter of channel name or members icon
+      return (
+        <View style={[styles.avatar, styles.groupAvatar]}>
+          <Ionicons name="people" size={16} color="white" />
+        </View>
+      )
+    }
+  }
+
+  // Format last message preview
+  const getLastMessagePreview = () => {
+    if (channel.last_message) {
+      const content = channel.last_message.content || ''
+      return content.length > 40 ? content.substring(0, 40) + '...' : content
+    }
+    return 'No messages yet'
+  }
+
+  // Format timestamp
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / (1000 * 60))
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffMins < 1) return 'now'
+    if (diffMins < 60) return `${diffMins}m`
+    if (diffHours < 24) return `${diffHours}h`
+    if (diffDays === 1) return '1d'
+    if (diffDays < 7) return `${diffDays}d`
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
   return (
     <TouchableOpacity
       style={[styles.channelItem, isSelected && styles.selectedChannel]}
       onPress={onSelect}
       activeOpacity={0.7}
     >
-      <View style={styles.channelContent}>
-        <View style={styles.channelIcon}>
-          {isDM ? (
-            // Show avatar or initials for DM
-            channel.dm_user?.avatar_url ? (
-              <Image 
-                source={{ uri: channel.dm_user.avatar_url }} 
-                style={styles.dmAvatar}
-              />
-            ) : (
-              <View style={styles.dmAvatarFallback}>
-                <Text style={styles.dmInitials}>
-                  {getUserInitials(displayName)}
-                </Text>
-              </View>
-            )
-          ) : (
-            // Show hash for regular channels
-            <Text style={styles.hashIcon}>#</Text>
-          )}
-        </View>
-        
-        <View style={styles.channelInfo}>
-          <View style={styles.channelNameRow}>
-            <Text style={[styles.channelName, isSelected && styles.selectedText]} numberOfLines={1}>
-              {displayName}
-            </Text>
-            {isDM && channel.dm_user?.is_online && (
-              <View style={styles.onlineIndicator} />
-            )}
-          </View>
-          
-          {/* Show member count for regular channels, not DMs */}
-          {!isDM && channel.member_count !== undefined && (
-            <View style={styles.memberCountRow}>
-              <Ionicons name="people" size={12} color="#94a3b8" />
-              <Text style={styles.memberCountText}>
-                {channel.member_count} {channel.member_count === 1 ? 'member' : 'members'}
-              </Text>
-            </View>
-          )}
-        </View>
-        
-        {channel.unread_count > 0 && (
-          <View style={styles.unreadBadge}>
-            <Text style={styles.unreadCount}>{channel.unread_count}</Text>
-          </View>
+      <View style={styles.avatarContainer}>
+        {getChannelAvatar()}
+        {isDM && channel.dm_user?.is_online && (
+          <View style={styles.onlineIndicator} />
         )}
       </View>
+      
+      <View style={styles.channelInfo}>
+        <View style={styles.headerRow}>
+          <Text style={[styles.channelName, isSelected && styles.selectedText]} numberOfLines={1}>
+            {displayName}
+          </Text>
+          {channel.last_message && (
+            <Text style={styles.timestamp}>
+              {formatTimestamp(channel.last_message.created_at)}
+            </Text>
+          )}
+        </View>
+        
+        <View style={styles.contentRow}>
+          {isDM ? (
+            // DM specific info - position and department
+            <>
+              {roleInfo ? (
+                <Text style={styles.roleInfo} numberOfLines={1}>
+                  {roleInfo}
+                </Text>
+              ) : (
+                <Text style={styles.lastMessage} numberOfLines={1}>
+                  {getLastMessagePreview()}
+                </Text>
+              )}
+            </>
+          ) : (
+            // Group channel info
+            <>
+              <Text style={styles.lastMessage} numberOfLines={1}>
+                {getLastMessagePreview()}
+              </Text>
+              {channel.member_count !== undefined && (
+                <View style={styles.memberCountInline}>
+                  <Ionicons name="people" size={12} color="#94a3b8" />
+                  <Text style={styles.memberCountText}>
+                    {channel.member_count}
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      </View>
+      
+      {channel.unread_count > 0 && (
+        <View style={styles.unreadBadge}>
+          <Text style={styles.unreadCount}>
+            {channel.unread_count > 99 ? '99+' : channel.unread_count}
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   )
 }
@@ -101,39 +172,34 @@ export const ChannelList: React.FC<{
   const regularChannels = uniqueChannels.filter(c => c.type !== 'direct')
   const directMessages = uniqueChannels.filter(c => c.type === 'direct')
 
+  // Sort by last message timestamp (most recent first)
+  const sortedChannels = [...regularChannels, ...directMessages].sort((a, b) => {
+    const timeA = a.last_message ? new Date(a.last_message.created_at).getTime() : 0
+    const timeB = b.last_message ? new Date(b.last_message.created_at).getTime() : 0
+    return timeB - timeA
+  })
+
   return (
     <View style={styles.container}>
       <FlatList
-        data={[
-          { type: 'section', title: 'Channels', key: 'section-channels' },
-          ...regularChannels.map(c => ({ ...c, type: 'channel', key: c.id })),
-          { type: 'section', title: 'Direct Messages', key: 'section-dms' },
-          ...directMessages.map(c => ({ ...c, type: 'dm', key: c.id }))
-        ]}
-        renderItem={({ item }) => {
-          if (item.type === 'section') {
-            return (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>{item.title}</Text>
-              </View>
-            )
-          }
-          return (
-            <ChannelItem
-              channel={item}
-              isSelected={item.id === selectedChannelId}
-              onSelect={() => onChannelSelect(item)}
-            />
-          )
-        }}
-        keyExtractor={(item) => item.key || item.id || item.title}
+        data={sortedChannels}
+        renderItem={({ item }) => (
+          <ChannelItem
+            channel={item}
+            isSelected={item.id === selectedChannelId}
+            onSelect={() => onChannelSelect(item)}
+          />
+        )}
+        keyExtractor={(item) => item.id}
         refreshControl={
           <RefreshControl
             refreshing={refreshing || false}
             onRefresh={onRefresh}
+            tintColor="#6366F1"
           />
         }
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
       />
     </View>
   )
@@ -142,112 +208,117 @@ export const ChannelList: React.FC<{
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
-    paddingTop: 12,
+    backgroundColor: '#ffffff',
   },
-  sectionHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  listContent: {
+    paddingTop: 8,
   },
   channelItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginHorizontal: 8,
-    marginBottom: 2,
-  },
-  selectedChannel: {
-    backgroundColor: '#e0e7ff',
-  },
-  channelContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc',
   },
-  channelIcon: {
-    width: 32,
-    height: 32,
+  selectedChannel: {
+    backgroundColor: '#f0f4ff',
+  },
+  avatarContainer: {
+    position: 'relative',
     marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  hashIcon: {
-    fontSize: 18,
-    color: '#64748b',
-    fontWeight: '600',
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
-  dmAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  dmAvatarFallback: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  avatarFallback: {
     backgroundColor: '#6366F1',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dmInitials: {
+  groupAvatar: {
+    backgroundColor: '#8b5cf6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981',
+    borderWidth: 2,
+    borderColor: 'white',
   },
   channelInfo: {
     flex: 1,
   },
-  channelNameRow: {
+  headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
   },
   channelName: {
-    fontSize: 15,
-    color: '#334155',
-    fontWeight: '500',
-    flex: 1,
-  },
-  selectedText: {
-    color: '#4f46e5',
+    fontSize: 16,
     fontWeight: '600',
+    color: '#1e293b',
+    flex: 1,
+    marginRight: 8,
   },
-  memberCountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-    gap: 4,
-  },
-  memberCountText: {
-    fontSize: 11,
+  timestamp: {
+    fontSize: 12,
     color: '#94a3b8',
     fontWeight: '500',
   },
-  onlineIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10b981',
-    marginLeft: 6,
+  contentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  roleInfo: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+    flex: 1,
+  },
+  lastMessage: {
+    fontSize: 14,
+    color: '#64748b',
+    flex: 1,
+    marginRight: 8,
+  },
+  memberCountInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  memberCountText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '500',
   },
   unreadBadge: {
     backgroundColor: '#ef4444',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: 12,
     minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 6,
   },
   unreadCount: {
     color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
   },
 })

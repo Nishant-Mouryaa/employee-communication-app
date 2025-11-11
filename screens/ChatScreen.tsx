@@ -32,6 +32,7 @@ import {
   MembersList,
   EditMessageModal,
 } from '../components/chat'
+import { TouchableOpacity, Text } from 'react-native'
 
 export default function ChatScreen() {
   const { user } = useAuth()
@@ -44,11 +45,11 @@ export default function ChatScreen() {
   const [channelMembersList, setChannelMembersList] = useState<ChannelMember[]>([])
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
+  const [showConversationList, setShowConversationList] = useState(true) // New state for WhatsApp-like navigation
 
- 
   const handleReply = useCallback((message: Message) => {
-  setReplyingTo(message)
-}, [])
+    setReplyingTo(message)
+  }, [])
 
   const {
     channels,
@@ -70,11 +71,10 @@ export default function ChatScreen() {
     refresh,
     addReactionToMessage,
     removeReactionFromMessage,
-     createDirectMessage, 
+    createDirectMessage, 
   } = useChatData(user?.id)
-  
 
-    const handleStartDirectMessage = useCallback(async (member: ChannelMember) => {
+  const handleStartDirectMessage = useCallback(async (member: ChannelMember) => {
     if (!user?.id || member.user_id === user.id) {
       console.log('Cannot start DM: same user or no user ID')
       return
@@ -91,13 +91,15 @@ export default function ChatScreen() {
       
       if (dmChannel) {
         console.log('DM Channel opened:', dmChannel)
+        // Switch to the new DM channel and hide conversation list
+        selectChannel(dmChannel)
+        setShowConversationList(false)
       }
     } catch (error) {
       console.error('Error starting direct message:', error)
       Alert.alert('Error', 'Failed to start direct message. Please try again.')
     }
-  }, [user?.id, createDirectMessage])
-
+  }, [user?.id, createDirectMessage, selectChannel])
 
   const { typingUsers, handleTyping, handleStopTyping } = useTypingIndicator({
     channelId: selectedChannel?.id,
@@ -199,46 +201,46 @@ export default function ChatScreen() {
     }
   }, [selectedChannel?.id, user?.id, loadMessages, loadChannelMembers])
 
-   const handleEditMessage = useCallback((message: Message) => {
-  setEditingMessage(message)
-}, [])
-
-
-
+  const handleEditMessage = useCallback((message: Message) => {
+    setEditingMessage(message)
+  }, [])
 
   const handleSaveEdit = useCallback(async (messageId: string, newContent: string) => {
-  try {
-    await editMessage(messageId, newContent)
-    setEditingMessage(null)
-  } catch (error) {
-    console.error('Error saving edit:', error)
-    Alert.alert('Error', 'Failed to save changes')
-  }
-}, [editMessage])
+    try {
+      await editMessage(messageId, newContent)
+      setEditingMessage(null)
+    } catch (error) {
+      console.error('Error saving edit:', error)
+      Alert.alert('Error', 'Failed to save changes')
+    }
+  }, [editMessage])
+
   // All useCallback hooks must be declared unconditionally
   const handleChannelSelect = useCallback((channel: Channel) => {
     selectChannel(channel)
+    setShowConversationList(false) // Hide conversation list when channel is selected
     setShowChannelModal(false)
   }, [selectChannel])
 
-const handleSendMessage = useCallback(async () => {
-  if (!message.trim() || !selectedChannel || !user) return
+  const handleSendMessage = useCallback(async () => {
+    if (!message.trim() || !selectedChannel || !user) return
 
-  try {
-    await sendChatMessage(message, replyingTo?.id) // Pass reply ID
-    setMessage('')
-    setReplyingTo(null) // Clear reply after sending
-    await handleStopTyping()
-  } catch (error) {
-    console.error('Error sending message:', error)
-    Alert.alert('Error', 'Failed to send message. Please try again.')
-  }
-}, [message, selectedChannel, user, sendChatMessage, handleStopTyping, replyingTo])
+    try {
+      await sendChatMessage(message, replyingTo?.id) // Pass reply ID
+      setMessage('')
+      setReplyingTo(null) // Clear reply after sending
+      await handleStopTyping()
+    } catch (error) {
+      console.error('Error sending message:', error)
+      Alert.alert('Error', 'Failed to send message. Please try again.')
+    }
+  }, [message, selectedChannel, user, sendChatMessage, handleStopTyping, replyingTo])
 
-// Add cancel reply handler
-const handleCancelReply = useCallback(() => {
-  setReplyingTo(null)
-}, [])
+  // Add cancel reply handler
+  const handleCancelReply = useCallback(() => {
+    setReplyingTo(null)
+  }, [])
+
   const handleDeleteMessage = useCallback((messageId: string, isOwn: boolean) => {
     if (!isOwn) return
 
@@ -290,19 +292,25 @@ const handleCancelReply = useCallback(() => {
   }, [])
 
   const handleCloseEdit = useCallback(() => {
-  setEditingMessage(null)
-}, [])
+    setEditingMessage(null)
+  }, [])
 
   const handleCloseMembers = useCallback(() => {
     setShowMembersList(false)
   }, [])
+
+  // New handler for back navigation from chat to conversation list
+  const handleBackToConversations = useCallback(() => {
+    setShowConversationList(true)
+    selectChannel(null)
+  }, [selectChannel])
 
   // Loading state - this is a conditional return, which is allowed
   if (!hasUserChecked || loading) {
     return (
       <SafeAreaView style={styles.container}>
         <LoadingState 
-          message={!user ? 'Waiting for authentication...' : 'Loading channels...'}
+          message={!user ? 'Waiting for authentication...' : 'Loading conversations...'}
         />
       </SafeAreaView>
     )
@@ -317,167 +325,197 @@ const handleCancelReply = useCallback(() => {
     )
   }
 
-  // Mobile layout
-if (IS_MOBILE) {
-  return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
-  <ChatHeader
-  channelName={selectedChannel?.type === 'direct' && selectedChannel?.dm_user
-    ? selectedChannel.dm_user.full_name || selectedChannel.dm_user.username
-    : selectedChannel?.name}
-  unreadCount={getTotalUnreadCount()}
-  onChannelPress={() => setShowChannelModal(true)}
-  onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
-  memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
-  isDM={selectedChannel?.type === 'direct'}
-  dmUser={selectedChannel?.dm_user}
-/>
+  // WhatsApp-like layout with conversation list
+  if (IS_MOBILE) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView 
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
+        >
+          {showConversationList ? (
+            // Conversation List View (WhatsApp home screen)
+            <View style={styles.conversationListContainer}>
+              <View style={styles.conversationHeader}>
+                <Text style={styles.conversationHeaderTitle}>Chats</Text>
+                <TouchableOpacity 
+                  style={styles.newChatButton}
+                  onPress={() => setShowChannelModal(true)}
+                >
+                  <Text style={styles.newChatButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <ChannelList
+                channels={channels}
+                selectedChannelId={selectedChannel?.id}
+                onChannelSelect={handleChannelSelect}
+                refreshing={refreshing}
+                onRefresh={refresh}
+              />
+            </View>
+          ) : (
+            // Individual Chat View
+            <>
+              <ChatHeader
+                channelName={selectedChannel?.type === 'direct' && selectedChannel?.dm_user
+                  ? selectedChannel.dm_user.full_name || selectedChannel.dm_user.username
+                  : selectedChannel?.name}
+                unreadCount={getTotalUnreadCount()}
+                onChannelPress={handleBackToConversations} // Back to conversation list
+                onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
+                memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
+                isDM={selectedChannel?.type === 'direct'}
+                dmUser={selectedChannel?.dm_user}
+                  showBackButton={true} // Add this
+  onBackPress={handleBackToConversations} // Add this
+              />
 
-        {showMembersList ? (
-          <MembersList
-            members={channelMembersList}
-            isVisible={showMembersList}
-            onClose={handleCloseMembers}
-            currentUserId={user?.id}
-            onStartDirectMessage={handleStartDirectMessage} // ✅ ADD THIS LINE
+              {showMembersList ? (
+                <MembersList
+                  members={channelMembersList}
+                  isVisible={showMembersList}
+                  onClose={handleCloseMembers}
+                  currentUserId={user?.id}
+                  onStartDirectMessage={handleStartDirectMessage}
+                />
+              ) : selectedChannel ? (
+                <>
+                  <MessageList
+                    messages={messages}
+                    currentUserId={user.id}
+                    channelMembers={channelMembers}
+                    channelName={
+                      selectedChannel.type === 'direct' && selectedChannel.dm_user
+                        ? `${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
+                        : selectedChannel.name
+                    }
+                    refreshing={refreshing}
+                    onRefresh={refresh}
+                    onDeleteMessage={handleDeleteMessage}
+                    onEditMessage={handleEditMessage}
+                    onReaction={handleReaction}
+                    onReply={handleReply}
+                    getReadReceiptText={getMessageReadReceiptText}
+                  />
+
+                  <TypingIndicator typingUsers={typingUsers} />
+                  
+                  <MessageInput
+                    value={message}
+                    onChangeText={setMessage}
+                    onSend={handleSendMessage}
+                    placeholder={
+                      selectedChannel?.type === 'direct' && selectedChannel?.dm_user
+                        ? `Message ${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
+                        : `Message #${selectedChannel?.name || 'channel'}`
+                    }
+                    sending={sending}
+                    onTyping={handleTyping}
+                    replyingTo={replyingTo}
+                    onCancelReply={handleCancelReply}
+                    channelMembers={channelMembers}
+                  />
+                </>
+              ) : (
+                <EmptyState onSelectChannel={() => setShowChannelModal(true)} />
+              )}
+
+              <EditMessageModal
+                visible={!!editingMessage}
+                message={editingMessage}
+                onClose={handleCloseEdit}
+                onSave={handleSaveEdit}
+              />
+            </>
+          )}
+
+          <ChannelModal
+            visible={showChannelModal}
+            channels={channels}
+            selectedChannelId={selectedChannel?.id}
+            onClose={() => setShowChannelModal(false)}
+            onSelectChannel={handleChannelSelect}
           />
-        ) : selectedChannel ? (
-          <>
-         <MessageList
-  messages={messages}
-  currentUserId={user.id}
-  channelMembers={channelMembers}
-  channelName={
-    selectedChannel.type === 'direct' && selectedChannel.dm_user
-      ? `${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
-      : selectedChannel.name
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    )
   }
-  refreshing={refreshing}
-  onRefresh={refresh}
-  onDeleteMessage={handleDeleteMessage}
-  onEditMessage={handleEditMessage}
-  onReaction={handleReaction}
-  onReply={handleReply}
-  getReadReceiptText={getMessageReadReceiptText}
-/>
 
-            <TypingIndicator typingUsers={typingUsers} />
-            
-          <MessageInput
-  value={message}
-  onChangeText={setMessage}
-  onSend={handleSendMessage}
-  placeholder={
-    selectedChannel?.type === 'direct' && selectedChannel?.dm_user
-      ? `Message ${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
-      : `Message #${selectedChannel?.name || 'channel'}`
-  }
-  sending={sending}
-  onTyping={handleTyping}
-  replyingTo={replyingTo}
-  onCancelReply={handleCancelReply}
-   channelMembers={channelMembers}
-/>
-          </>
-        ) : (
-          <EmptyState onSelectChannel={() => setShowChannelModal(true)} />
-        )}
-
-        <ChannelModal
-          visible={showChannelModal}
-          channels={channels}
-          selectedChannelId={selectedChannel?.id}
-          onClose={() => setShowChannelModal(false)}
-          onSelectChannel={handleChannelSelect}
-        />
-        
-        <EditMessageModal
-          visible={!!editingMessage}
-          message={editingMessage}
-          onClose={handleCloseEdit}
-          onSave={handleSaveEdit}
-        />
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  )
-}
-
-  // Desktop layout
+  // Desktop layout - modified for WhatsApp-like experience
   return (
     <KeyboardAvoidingView 
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-<ChatHeader
-  channelName={selectedChannel?.type === 'direct' && selectedChannel?.dm_user
-    ? selectedChannel.dm_user.full_name || selectedChannel.dm_user.username
-    : selectedChannel?.name}
-  unreadCount={getTotalUnreadCount()}
-  onChannelPress={() => setShowChannelModal(true)}
-  onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
-  memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
-  isDM={selectedChannel?.type === 'direct'}
-  dmUser={selectedChannel?.dm_user}
-/>
-
       <View style={styles.content}>
-        <ChannelList
-          channels={channels}
-          selectedChannelId={selectedChannel?.id}
-          onChannelSelect={handleChannelSelect}
-          refreshing={refreshing}
-          onRefresh={refresh}
-        />
+        {/* Conversation List Sidebar */}
+        <View style={styles.conversationSidebar}>
+          <View style={styles.sidebarHeader}>
+            <Text style={styles.sidebarTitle}>Chats</Text>
+            <TouchableOpacity 
+              style={styles.newChatButton}
+              onPress={() => setShowChannelModal(true)}
+            >
+              <Text style={styles.newChatButtonText}>+</Text>
+            </TouchableOpacity>
+          </View>
+          <ChannelList
+            channels={channels}
+            selectedChannelId={selectedChannel?.id}
+            onChannelSelect={handleChannelSelect}
+            refreshing={refreshing}
+            onRefresh={refresh}
+          />
+        </View>
 
+        {/* Chat Area */}
         <View style={styles.chatArea}>
           {selectedChannel ? (
             <>
-             <ChatAreaHeader   
+          <ChatAreaHeader   
   channelName={selectedChannel.name}
-  onBack={() => selectChannel(null)}
+  onBack={handleBackToConversations}
+  showBackButton={true}
   onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
   memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
   isDM={selectedChannel?.type === 'direct'}
   dmUser={selectedChannel?.dm_user}
 />
 
-           <MessageList
-  messages={messages}
-  currentUserId={user.id}
-  channelMembers={channelMembers}
-  channelName={
-    selectedChannel.type === 'direct' && selectedChannel.dm_user
-      ? `${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
-      : selectedChannel.name
-  }
-  refreshing={refreshing}
-  onRefresh={refresh}
-  onDeleteMessage={handleDeleteMessage}
-  onReaction={handleReaction}
-  getReadReceiptText={getMessageReadReceiptText}
-/>
+              <MessageList
+                messages={messages}
+                currentUserId={user.id}
+                channelMembers={channelMembers}
+                channelName={
+                  selectedChannel.type === 'direct' && selectedChannel.dm_user
+                    ? `${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
+                    : selectedChannel.name
+                }
+                refreshing={refreshing}
+                onRefresh={refresh}
+                onDeleteMessage={handleDeleteMessage}
+                onReaction={handleReaction}
+                getReadReceiptText={getMessageReadReceiptText}
+              />
 
               <TypingIndicator typingUsers={typingUsers} />
 
-          <MessageInput
-  value={message}
-  onChangeText={setMessage}
-  onSend={handleSendMessage}
-  placeholder={
-    selectedChannel?.type === 'direct' && selectedChannel?.dm_user
-      ? `Message ${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
-      : `Message #${selectedChannel?.name || 'channel'}`
-  }
-  sending={sending}
-  onTyping={handleTyping}
-   channelMembers={channelMembers}
-/>
+              <MessageInput
+                value={message}
+                onChangeText={setMessage}
+                onSend={handleSendMessage}
+                placeholder={
+                  selectedChannel?.type === 'direct' && selectedChannel?.dm_user
+                    ? `Message ${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
+                    : `Message #${selectedChannel?.name || 'channel'}`
+                }
+                sending={sending}
+                onTyping={handleTyping}
+                channelMembers={channelMembers}
+              />
             </>
           ) : (
             <EmptyState />
@@ -487,14 +525,29 @@ if (IS_MOBILE) {
         {/* Members List Sidebar for Desktop */}
         {showMembersList && (
           <MembersList
-  members={channelMembersList}
-  isVisible={showMembersList}
-  onClose={handleCloseMembers}
-  currentUserId={user?.id}
-  onStartDirectMessage={handleStartDirectMessage} // Add this
-/>
+            members={channelMembersList}
+            isVisible={showMembersList}
+            onClose={handleCloseMembers}
+            currentUserId={user?.id}
+            onStartDirectMessage={handleStartDirectMessage}
+          />
         )}
       </View>
+
+      <ChannelModal
+        visible={showChannelModal}
+        channels={channels}
+        selectedChannelId={selectedChannel?.id}
+        onClose={() => setShowChannelModal(false)}
+        onSelectChannel={handleChannelSelect}
+      />
+      
+      <EditMessageModal
+        visible={!!editingMessage}
+        message={editingMessage}
+        onClose={handleCloseEdit}
+        onSave={handleSaveEdit}
+      />
     </KeyboardAvoidingView>
   )
 }
@@ -507,6 +560,59 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     flexDirection: 'row',
+  },
+  conversationListContainer: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  conversationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  conversationHeaderTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  conversationSidebar: {
+    width: 350,
+    backgroundColor: '#ffffff',
+    borderRightWidth: 1,
+    borderRightColor: '#e2e8f0',
+  },
+  sidebarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  sidebarTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  newChatButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  newChatButtonText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: '600',
   },
   chatArea: {
     flex: 1,
