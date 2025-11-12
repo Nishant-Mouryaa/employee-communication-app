@@ -230,7 +230,7 @@ async function updateProfile() {
       })
 
       if (!result.canceled && result.assets[0]) {
-        uploadImage(result.assets[0].uri)
+        await uploadImage(result.assets[0])
       }
     } catch (error) {
       console.error('Error picking image:', error)
@@ -238,21 +238,42 @@ async function updateProfile() {
     }
   }
 
-  const uploadImage = async (uri: string) => {
+  const uploadImage = async (asset: ImagePicker.ImagePickerAsset) => {
     try {
+      if (!user) {
+        throw new Error('No user found')
+      }
+
       setUploading(true)
 
-      const response = await fetch(uri)
-      const blob = await response.blob()
-      
-      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg'
-      const fileName = `${user?.id}-${Date.now()}.${fileExt}`
+      const response = await fetch(asset.uri)
+      if (!response.ok) {
+        throw new Error('Failed to read selected image')
+      }
+
+      const arrayBuffer = response.arrayBuffer
+        ? await response.arrayBuffer()
+        : null
+
+      if (!arrayBuffer) {
+        throw new Error('Unable to process selected image')
+      }
+
+      const inferredExt =
+        asset.fileName?.split('.').pop()?.toLowerCase() ||
+        asset.uri.split('.').pop()?.toLowerCase() ||
+        'jpg'
+
+      const fileExt = inferredExt.replace('jpeg', 'jpg')
+      const contentType = asset.mimeType || `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`
+
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`
       const filePath = `avatars/${fileName}`
 
       const { error: uploadError } = await supabase.storage
         .from('profile-images')
-        .upload(filePath, blob, {
-          contentType: `image/${fileExt}`,
+        .upload(filePath, arrayBuffer, {
+          contentType,
           upsert: true
         })
 
@@ -260,11 +281,15 @@ async function updateProfile() {
         throw uploadError
       }
 
-      const { data: { publicUrl } } = supabase.storage
+      const { data: publicUrlResult, error: publicUrlError } = supabase.storage
         .from('profile-images')
         .getPublicUrl(filePath)
 
-      setAvatarUrl(publicUrl)
+      if (publicUrlError) {
+        throw publicUrlError
+      }
+
+      setAvatarUrl(publicUrlResult.publicUrl)
       Alert.alert('Success', 'Profile picture uploaded!')
       setIsEditing(true)
     } catch (error) {

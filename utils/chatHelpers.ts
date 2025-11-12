@@ -1,4 +1,5 @@
 // utils/chatHelpers.ts
+import { Message } from '../types/chat'
 export const formatTime = (timestamp: string): string => {
   const date = new Date(timestamp)
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -95,6 +96,14 @@ export const sanitizeMessage = (text: string): string => {
     .trim()
     .replace(/[<>]/g, '')
     .slice(0, 500)
+}
+
+export const formatFileSize = (bytes?: number): string => {
+  if (!bytes || bytes <= 0) return ''
+  const units = ['B', 'KB', 'MB', 'GB']
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  const value = bytes / Math.pow(1024, exponent)
+  return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`
 }
 
 export const getTypingText = (typingUsers: Array<{ full_name?: string; username: string }>): string => {

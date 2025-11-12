@@ -1,6 +1,6 @@
 // services/messageService.ts
 import { supabase } from '../lib/supabase'
-import { Message } from '../types/chat'
+import { Message, MessageAttachment } from '../types/chat'
 import { getMessageReactions } from './reactionService'
 
 export const fetchMessages = async (channelId: string) => {
@@ -74,6 +74,7 @@ export const fetchMessages = async (channelId: string) => {
       
       return {
         ...message,
+        attachments: message.attachments || [],
         reactions: reactions || [],
         read_by: readBy,
         read_count: readBy.length,
@@ -90,7 +91,8 @@ export const sendMessage = async (
   content: string,
   channelId: string,
   userId: string,
-  replyToId?: string
+  replyToId?: string,
+  attachments?: MessageAttachment[]
 ): Promise<Message> => {
   // Extract mentions from content
   const mentionMatches = content.matchAll(/@(\w+)/g)
@@ -108,7 +110,8 @@ export const sendMessage = async (
     content,
     channel_id: channelId,
     user_id: userId,
-    mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null
+    mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null,
+    attachments: attachments && attachments.length > 0 ? attachments : null
   }
 
   if (replyToId) {
@@ -153,6 +156,7 @@ export const sendMessage = async (
   
   return { 
     ...data, 
+    attachments: data.attachments || [],
     reactions: [],
     read_by: [], 
     read_count: 0,
@@ -245,6 +249,7 @@ export const updateMessage = async (
 
   return {
     ...data,
+    attachments: data.attachments || [],
     reactions: reactions || [],
     read_by: readBy,
     read_count: readBy.length,

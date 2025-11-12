@@ -8,6 +8,7 @@ import {
   Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import * as DocumentPicker from 'expo-document-picker'
 import { useAuth } from '../hooks/useAuth'
 import { useChatData } from '../hooks/useChatData'
 import { useRealtimeChat } from '../hooks/useRealtimeChat'
@@ -17,8 +18,9 @@ import { markMessageAsRead, getReadReceiptText } from '../services/readReceiptSe
 import { addReaction, removeReaction } from '../services/reactionService'
 import { fetchChannelMembersList } from '../services/channelService'
 import { IS_MOBILE } from '../constants/chat'
-import { Channel, ChannelMember, Message } from '../types/chat'
+import { Channel, ChannelMember, Message, PendingAttachment, MessageAttachmentType } from '../types/chat'
 import { createOrGetDirectMessageChannel } from '../services/directMessageService'
+import { uploadPendingAttachments } from '../services/attachmentService'
 import {
   ChatHeader,
   ChannelList,
@@ -46,9 +48,79 @@ export default function ChatScreen() {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
   const [showConversationList, setShowConversationList] = useState(true) // New state for WhatsApp-like navigation
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
+  const [uploadingAttachments, setUploadingAttachments] = useState(false)
 
   const handleReply = useCallback((message: Message) => {
     setReplyingTo(message)
+  }, [])
+
+  const getAttachmentType = useCallback((mimeType?: string, name?: string): MessageAttachmentType => {
+    if (mimeType) {
+      if (mimeType.startsWith('image/')) return 'image'
+      if (mimeType.startsWith('video/')) return 'video'
+      if (mimeType.startsWith('audio/')) return 'audio'
+      if (
+        mimeType === 'application/pdf' ||
+        mimeType.includes('application/msword') ||
+        mimeType.includes('application/vnd')
+      ) {
+        return 'document'
+      }
+    }
+
+    const extension = name?.split('.').pop()?.toLowerCase()
+    if (extension) {
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'].includes(extension)) return 'image'
+      if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(extension)) return 'video'
+      if (['mp3', 'wav', 'aac', 'm4a', 'ogg'].includes(extension)) return 'audio'
+      if (['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt'].includes(extension)) return 'document'
+    }
+    return 'other'
+  }, [])
+
+  const handleAddAttachments = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        multiple: true,
+        copyToCacheDirectory: true,
+      })
+
+      if (result.canceled) return
+
+      const assets = result.assets ?? []
+      if (!assets.length) return
+
+      setPendingAttachments(prev => {
+        const existingUris = new Set(prev.map(att => att.uri))
+        const newAttachments = assets
+          .filter(asset => asset.uri && !existingUris.has(asset.uri))
+          .map(asset => {
+            const id = globalThis?.crypto?.randomUUID
+              ? globalThis.crypto.randomUUID()
+              : `${Date.now()}-${Math.random()}`
+            const mimeType = asset.mimeType || 'application/octet-stream'
+            return {
+              id,
+              uri: asset.uri,
+              name: asset.name || 'Attachment',
+              mime_type: mimeType,
+              size: asset.size || undefined,
+              type: getAttachmentType(mimeType, asset.name),
+            } as PendingAttachment
+          })
+
+        return [...prev, ...newAttachments]
+      })
+    } catch (error) {
+      console.error('Error picking attachments:', error)
+      Alert.alert('Error', 'Failed to select files. Please try again.')
+    }
+  }, [getAttachmentType])
+
+  const handleRemoveAttachment = useCallback((attachmentId: string) => {
+    setPendingAttachments(prev => prev.filter(att => att.id !== attachmentId))
   }, [])
 
   const {
@@ -223,18 +295,40 @@ export default function ChatScreen() {
   }, [selectChannel])
 
   const handleSendMessage = useCallback(async () => {
-    if (!message.trim() || !selectedChannel || !user) return
+    if (!selectedChannel || !user) return
+
+    const trimmedMessage = message.trim()
+    const hasText = trimmedMessage.length > 0
+    const hasAttachments = pendingAttachments.length > 0
+    if (!hasText && !hasAttachments) return
 
     try {
-      await sendChatMessage(message, replyingTo?.id) // Pass reply ID
+      setUploadingAttachments(hasAttachments)
+
+      const uploadedAttachments = hasAttachments
+        ? await uploadPendingAttachments(pendingAttachments, selectedChannel.id, user.id)
+        : []
+
+      await sendChatMessage(trimmedMessage, replyingTo?.id, uploadedAttachments) // Pass reply ID
       setMessage('')
       setReplyingTo(null) // Clear reply after sending
+      setPendingAttachments([])
       await handleStopTyping()
     } catch (error) {
       console.error('Error sending message:', error)
       Alert.alert('Error', 'Failed to send message. Please try again.')
+    } finally {
+      setUploadingAttachments(false)
     }
-  }, [message, selectedChannel, user, sendChatMessage, handleStopTyping, replyingTo])
+  }, [
+    message,
+    selectedChannel,
+    user,
+    sendChatMessage,
+    handleStopTyping,
+    replyingTo,
+    pendingAttachments,
+  ])
 
   // Add cancel reply handler
   const handleCancelReply = useCallback(() => {
@@ -416,6 +510,10 @@ export default function ChatScreen() {
                     replyingTo={replyingTo}
                     onCancelReply={handleCancelReply}
                     channelMembers={channelMembers}
+                    attachments={pendingAttachments}
+                    onAttachPress={handleAddAttachments}
+                    onRemoveAttachment={handleRemoveAttachment}
+                    uploadingAttachments={uploadingAttachments}
                   />
                 </>
               ) : (
@@ -515,6 +613,10 @@ export default function ChatScreen() {
                 sending={sending}
                 onTyping={handleTyping}
                 channelMembers={channelMembers}
+                attachments={pendingAttachments}
+                onAttachPress={handleAddAttachments}
+                onRemoveAttachment={handleRemoveAttachment}
+                uploadingAttachments={uploadingAttachments}
               />
             </>
           ) : (

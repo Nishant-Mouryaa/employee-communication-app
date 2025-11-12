@@ -2,7 +2,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import { Message, Reaction } from '../types/chat'
+import { Message, Reaction, MessageAttachment } from '../types/chat'
 import { getReactionWithProfile } from '../services/reactionService'
 
 interface UseRealtimeChatProps {
@@ -47,8 +47,10 @@ export const useRealtimeChat = ({
               .eq('id', payload.new.user_id)
               .single()
 
-            const messageWithProfile = {
-              ...payload.new,
+            const baseMessage = payload.new as Message
+            const messageWithProfile: Message = {
+              ...baseMessage,
+              attachments: (payload.new.attachments as MessageAttachment[] | null) || [],
               profiles: profile || { 
                 id: payload.new.user_id,
                 username: 'Unknown', 
@@ -58,7 +60,7 @@ export const useRealtimeChat = ({
               read_by: [],
               read_count: 0,
               reactions: [] // Initialize with empty reactions
-            } as Message
+            }
 
             onNewMessage(messageWithProfile)
           } catch (error) {

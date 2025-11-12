@@ -14,7 +14,7 @@ interface MessageListProps {
   refreshing: boolean
   onRefresh: () => void
   onDeleteMessage: (messageId: string, isOwn: boolean) => void
-  onEditMessage?: (messageId: string, newContent: string) => void
+  onEditMessage?: (message: Message) => void
   onReaction: (messageId: string, emoji: string) => void
   onReply?: (message: Message) => void
   getReadReceiptText: (message: Message) => string
@@ -49,11 +49,11 @@ export const MessageList: React.FC<MessageListProps> = ({
     onDeleteMessage(messageId, true)
   }
 
-const handleEdit = (message: Message) => {
-  if (onEditMessage) {
-    onEditMessage(message) // Pass the full message
+  const handleEdit = (message: Message) => {
+    if (onEditMessage) {
+      onEditMessage(message)
+    }
   }
-}
 
   const scrollToMessage = (messageId: string) => {
     const index = messages.findIndex(m => m.id === messageId)

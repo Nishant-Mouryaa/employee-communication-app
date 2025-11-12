@@ -21,6 +21,29 @@ export interface Profile {
   position?: string
 }
 
+export type MessageAttachmentType = 'image' | 'video' | 'audio' | 'document' | 'other'
+
+export interface MessageAttachment {
+  id: string
+  name: string
+  url: string
+  type: MessageAttachmentType
+  mime_type?: string
+  size?: number
+  thumbnail_url?: string
+  width?: number
+  height?: number
+}
+
+export interface PendingAttachment {
+  id: string
+  uri: string
+  name: string
+  type: MessageAttachmentType
+  mime_type?: string
+  size?: number
+}
+
 export interface Reaction {
   id: string
   message_id: string
@@ -45,6 +68,7 @@ export interface Message {
   edited_at?: string
   is_edited?: boolean
   mentions?: string[]
+  attachments?: MessageAttachment[]
 }
 
 export interface TypingUser {

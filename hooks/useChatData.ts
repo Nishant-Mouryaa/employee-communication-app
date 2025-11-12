@@ -1,7 +1,7 @@
 // hooks/useChatData.ts
 import { useState, useCallback, useRef } from 'react'
 import { Alert } from 'react-native'
-import { Channel, Message, ChatState, Reaction } from '../types/chat'
+import { Channel, Message, ChatState, Reaction, MessageAttachment } from '../types/chat'
 import { 
   fetchChannels, 
   fetchChannelUnreadCounts,
@@ -165,11 +165,15 @@ const loadChannels = useCallback(async () => {
     }
   }, [])
 
-  const sendMessage = useCallback(async (content: string, replyToId?: string) => {
+  const sendMessage = useCallback(async (
+    content: string,
+    replyToId?: string,
+    attachments: MessageAttachment[] = []
+  ) => {
     if (!userId || !state.selectedChannel) return null
 
     const sanitized = sanitizeMessage(content)
-    if (!sanitized) return null
+    if (!sanitized && attachments.length === 0) return null
 
     // Find the reply message if replyToId is provided
     const replyMessage = replyToId 
@@ -192,7 +196,8 @@ const loadChannels = useCallback(async () => {
       read_count: 0,
       reactions: [],
       reply_to: replyToId,
-      reply_message: replyMessage
+      reply_message: replyMessage,
+      attachments
     }
 
     setState(prev => ({ 
@@ -206,7 +211,8 @@ const loadChannels = useCallback(async () => {
         sanitized, 
         state.selectedChannel.id, 
         userId,
-        replyToId
+        replyToId,
+        attachments
       )
       
       setState(prev => ({

@@ -1,8 +1,8 @@
 // components/chat/MessageBubble.tsx
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, Pressable, Clipboard, Platform } from 'react-native'
-import { Message } from '../../types/chat'
-import { formatMessageTimestamp, getUserInitials } from '../../utils/chatHelpers'
+import { View, Text, StyleSheet, Pressable, Clipboard, Platform, TouchableOpacity, Linking, Image } from 'react-native'
+import { Message, MessageAttachment } from '../../types/chat'
+import { formatFileSize, formatMessageTimestamp, getUserInitials } from '../../utils/chatHelpers'
 import { IS_MOBILE } from '../../constants/chat'
 import { MessageReactions } from './MessageReactions'
 import { ReactionPicker } from './ReactionPicker'
@@ -104,6 +104,71 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   }
 
   const readStatus = getReadStatus()
+  const attachments = message.attachments ?? []
+
+  const handleOpenAttachment = (url: string) => {
+    Linking.openURL(url).catch(err => console.error('Failed to open attachment', err))
+  }
+
+  const renderAttachment = (attachment: MessageAttachment) => {
+    const key = `${message.id}-${attachment.id}`
+
+    if (attachment.type === 'image') {
+      return (
+        <TouchableOpacity
+          key={key}
+          style={styles.attachmentImageWrapper}
+          onPress={() => handleOpenAttachment(attachment.url)}
+          activeOpacity={0.8}
+        >
+          <Image
+            source={{ uri: attachment.thumbnail_url || attachment.url }}
+            style={styles.attachmentImage}
+            resizeMode="cover"
+          />
+            <View style={styles.attachmentOverlay}>
+              {attachment.name ? (
+                <Text style={styles.attachmentOverlayName} numberOfLines={1}>
+                  {attachment.name}
+                </Text>
+              ) : null}
+              {attachment.size ? (
+                <Text style={styles.attachmentOverlayMeta}>
+                  {formatFileSize(attachment.size)}
+                </Text>
+              ) : null}
+            </View>
+        </TouchableOpacity>
+      )
+    }
+
+    const label = attachment.name || 'Attachment'
+
+    return (
+      <TouchableOpacity
+        key={key}
+        style={styles.attachmentFileWrapper}
+        onPress={() => handleOpenAttachment(attachment.url)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.attachmentFileIcon}>
+          <Text style={styles.attachmentFileIconText}>
+            {attachment.type === 'video' ? '🎬' : attachment.type === 'audio' ? '🎵' : '📄'}
+          </Text>
+        </View>
+        <View style={styles.attachmentFileInfo}>
+          <Text numberOfLines={2} style={styles.attachmentFileName}>{label}</Text>
+          {(attachment.mime_type || attachment.size) && (
+            <Text numberOfLines={1} style={styles.attachmentFileMeta}>
+              {[attachment.mime_type, attachment.size ? formatFileSize(attachment.size) : null]
+                .filter(Boolean)
+                .join(' • ')}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    )
+  }
 
   return (
     <>
@@ -145,7 +210,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   />
                 )}
 
-                <MessageText content={message.content} style={styles.messageText} />
+                {attachments.length > 0 && (
+                  <View style={styles.attachmentsContainer}>
+                    {attachments.map(renderAttachment)}
+                  </View>
+                )}
+
+                {message.content ? (
+                  <MessageText content={message.content} style={styles.messageText} />
+                ) : null}
                 
                 <View style={styles.messageFooter}>
   <Text style={[styles.messageTime, isOwn && styles.ownMessageTime]}>
@@ -379,5 +452,72 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontStyle: 'italic',
     opacity: 0.7,
+  },
+  attachmentsContainer: {
+    marginBottom: 8,
+    gap: 8,
+  },
+  attachmentImageWrapper: {
+    width: 180,
+    height: 120,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#f1f5f9',
+  },
+  attachmentImage: {
+    width: '100%',
+    height: '100%',
+  },
+  attachmentOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+  },
+  attachmentOverlayName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F8FAFC',
+  },
+  attachmentOverlayMeta: {
+    fontSize: 11,
+    color: '#cbd5f5',
+    marginTop: 2,
+  },
+  attachmentFileWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  attachmentFileIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#e0e7ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  attachmentFileIconText: {
+    fontSize: 18,
+  },
+  attachmentFileInfo: {
+    flex: 1,
+  },
+  attachmentFileName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  attachmentFileMeta: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
   },
 })
