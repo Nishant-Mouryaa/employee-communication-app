@@ -7,6 +7,15 @@ import { ReplyPreview } from './ReplyPreview'
 import { MentionList } from './MentionList'
 import { formatFileSize } from '../../utils/chatHelpers'
 
+const COMMON_EMOJIS = ['😀', '😅', '😂', '🥹', '😍', '🤔', '🙌', '🔥', '🎉', '🙏']
+const SLASH_COMMANDS = [
+  { command: 'giphy', description: 'Search for a GIF', insert: '/giphy ' },
+  { command: 'shrug', description: 'Insert ¯\\_(ツ)_/¯', insert: '¯\\_(ツ)_/¯ ' },
+  { command: 'tableflip', description: 'Flip the table', insert: '(╯°□°）╯︵ ┻━┻ ' },
+  { command: 'away', description: 'Set status to away', insert: '/away ' },
+  { command: 'me', description: 'Highlight an action message', insert: '/me ' },
+]
+
 interface MessageInputProps {
   value: string
   onChangeText: (text: string) => void
@@ -41,6 +50,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [showMentions, setShowMentions] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
   const [cursorPosition, setCursorPosition] = useState(0)
+  const [showEmojiTray, setShowEmojiTray] = useState(false)
+  const [showSlashMenu, setShowSlashMenu] = useState(false)
 
   // Detect @ mentions
   useEffect(() => {
@@ -59,6 +70,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const handleChangeText = (text: string) => {
     onChangeText(text)
     onTyping()
+  }
+
+  const insertAtCursor = (textToInsert: string) => {
+    const before = value.substring(0, cursorPosition)
+    const after = value.substring(cursorPosition)
+    const newText = `${before}${textToInsert}${after}`
+    onChangeText(newText)
+    onTyping()
+    const newPosition = before.length + textToInsert.length
+    setTimeout(() => {
+      setCursorPosition(newPosition)
+    }, 0)
   }
 
   const handleSelectionChange = (event: any) => {
@@ -86,6 +109,40 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         setCursorPosition(beforeAt.length + mention.length)
       }, 0)
     }
+  }
+
+  const handleEmojiToggle = () => {
+    setShowEmojiTray(prev => !prev)
+    setShowSlashMenu(false)
+  }
+
+  const handleEmojiSelect = (emoji: string) => {
+    insertAtCursor(`${emoji} `)
+    setShowEmojiTray(false)
+  }
+
+  const handleSlashToggle = () => {
+    setShowSlashMenu(prev => !prev)
+    setShowEmojiTray(false)
+  }
+
+  const handleSlashCommandSelect = (item: typeof SLASH_COMMANDS[number]) => {
+    insertAtCursor(item.insert)
+    setShowSlashMenu(false)
+  }
+
+  const handleAttachPress = () => {
+    if (onAttachPress) {
+      setShowEmojiTray(false)
+      setShowSlashMenu(false)
+      onAttachPress()
+    }
+  }
+
+  const handleSendPress = () => {
+    setShowEmojiTray(false)
+    setShowSlashMenu(false)
+    onSend()
   }
 
   const hasText = value.trim().length > 0
@@ -170,24 +227,73 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             />
           </View>
         )}
+        {showEmojiTray && (
+          <View style={styles.emojiTray}>
+            {COMMON_EMOJIS.map(emoji => (
+              <TouchableOpacity
+                key={emoji}
+                style={styles.emojiButton}
+                onPress={() => handleEmojiSelect(emoji)}
+              >
+                <Text style={styles.emojiText}>{emoji}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {showSlashMenu && (
+          <View style={styles.slashMenu}>
+            {SLASH_COMMANDS.map(item => (
+              <TouchableOpacity
+                key={item.command}
+                style={styles.slashCommand}
+                onPress={() => handleSlashCommandSelect(item)}
+              >
+                <Text style={styles.slashCommandText}>/{item.command}</Text>
+                <Text style={styles.slashCommandDescription}>{item.description}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         {attachments.length > 0 && (
           <View style={styles.attachmentsContainerMobile}>
             {attachments.map(renderAttachmentPreview)}
           </View>
         )}
         <View style={styles.inputContainerMobile}>
-          {onAttachPress && (
+          <View style={styles.leadingActionsMobile}>
             <TouchableOpacity
               style={[
-                styles.attachButtonMobile,
-                (sending || uploadingAttachments) && styles.attachButtonDisabled
+                styles.actionIconButtonMobile,
+                showEmojiTray && styles.actionIconButtonActive
               ]}
-              onPress={onAttachPress}
+              onPress={handleEmojiToggle}
               disabled={sending || uploadingAttachments}
             >
-              <Text style={styles.attachButtonText}>+</Text>
+              <Text style={styles.actionIconText}>😊</Text>
             </TouchableOpacity>
-          )}
+            {onAttachPress && (
+              <TouchableOpacity
+                style={[
+                  styles.actionIconButtonMobile,
+                  (sending || uploadingAttachments) && styles.actionIconButtonDisabled
+                ]}
+                onPress={handleAttachPress}
+                disabled={sending || uploadingAttachments}
+              >
+                <Text style={styles.actionIconText}>📎</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.actionIconButtonMobile,
+                showSlashMenu && styles.actionIconButtonActive
+              ]}
+              onPress={handleSlashToggle}
+              disabled={sending || uploadingAttachments}
+            >
+              <Text style={styles.actionIconText}>/</Text>
+            </TouchableOpacity>
+          </View>
           <TextInput
             style={styles.textInputMobile}
             value={value}
@@ -201,7 +307,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           />
           <TouchableOpacity 
             style={[styles.sendButtonMobile, !canSend && styles.sendButtonDisabled]} 
-            onPress={onSend}
+            onPress={handleSendPress}
             disabled={!canSend}
           >
             {sending || uploadingAttachments ? (
@@ -232,24 +338,73 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           />
         </View>
       )}
+      {showEmojiTray && (
+        <View style={styles.emojiTrayDesktop}>
+          {COMMON_EMOJIS.map(emoji => (
+            <TouchableOpacity
+              key={emoji}
+              style={styles.emojiButtonDesktop}
+              onPress={() => handleEmojiSelect(emoji)}
+            >
+              <Text style={styles.emojiText}>{emoji}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+      {showSlashMenu && (
+        <View style={styles.slashMenuDesktop}>
+          {SLASH_COMMANDS.map(item => (
+            <TouchableOpacity
+              key={item.command}
+              style={styles.slashCommand}
+              onPress={() => handleSlashCommandSelect(item)}
+            >
+              <Text style={styles.slashCommandText}>/{item.command}</Text>
+              <Text style={styles.slashCommandDescription}>{item.description}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
       {attachments.length > 0 && (
         <View style={styles.attachmentsContainer}>
           {attachments.map(renderAttachmentPreview)}
         </View>
       )}
       <View style={styles.inputContainer}>
-        {onAttachPress && (
+        <View style={styles.leadingActions}>
           <TouchableOpacity
             style={[
-              styles.attachButton,
-              (sending || uploadingAttachments) && styles.attachButtonDisabled
+              styles.actionIconButton,
+              showEmojiTray && styles.actionIconButtonActive
             ]}
-            onPress={onAttachPress}
+            onPress={handleEmojiToggle}
             disabled={sending || uploadingAttachments}
           >
-            <Text style={styles.attachButtonIcon}>📎</Text>
+            <Text style={styles.actionIconText}>😊</Text>
           </TouchableOpacity>
-        )}
+          {onAttachPress && (
+            <TouchableOpacity
+              style={[
+                styles.actionIconButton,
+                (sending || uploadingAttachments) && styles.actionIconButtonDisabled
+              ]}
+              onPress={handleAttachPress}
+              disabled={sending || uploadingAttachments}
+            >
+              <Text style={styles.actionIconText}>📎</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[
+              styles.actionIconButton,
+              showSlashMenu && styles.actionIconButtonActive
+            ]}
+            onPress={handleSlashToggle}
+            disabled={sending || uploadingAttachments}
+          >
+            <Text style={styles.actionIconText}>/</Text>
+          </TouchableOpacity>
+        </View>
         <TextInput
           style={styles.textInput}
           value={value}
@@ -263,7 +418,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         />
         <TouchableOpacity 
           style={[styles.sendButton, !canSend && styles.sendButtonDisabled]} 
-          onPress={onSend}
+          onPress={handleSendPress}
           disabled={!canSend}
         >
           {sending || uploadingAttachments ? (
@@ -296,6 +451,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 16,
     alignItems: 'flex-end',
+    gap: 12,
   },
   attachmentsContainer: {
     flexDirection: 'row',
@@ -309,6 +465,7 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingBottom: Platform.OS === 'ios' ? 12 : 12,
     alignItems: 'flex-end',
+    gap: 8,
   },
   attachmentsContainerMobile: {
     flexDirection: 'row',
@@ -365,6 +522,41 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 15,
     fontWeight: '600',
+  },
+  leadingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  leadingActionsMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionIconButtonMobile: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionIconButtonDisabled: {
+    opacity: 0.5,
+  },
+  actionIconButtonActive: {
+    backgroundColor: '#e0e7ff',
+  },
+  actionIconText: {
+    fontSize: 18,
   },
   attachButton: {
     width: 44,
@@ -478,5 +670,68 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748b',
     marginTop: 2,
+  },
+  emojiTray: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  emojiTrayDesktop: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  emojiButton: {
+    padding: 6,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+  },
+  emojiButtonDesktop: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+  },
+  emojiText: {
+    fontSize: 22,
+  },
+  slashMenu: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  slashMenuDesktop: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  slashCommand: {
+    paddingVertical: 6,
+  },
+  slashCommandText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  slashCommandDescription: {
+    fontSize: 12,
+    color: '#64748b',
   },
 })

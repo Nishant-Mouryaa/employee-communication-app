@@ -1,4 +1,5 @@
 // App.tsx
+import React from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { View, ActivityIndicator, Platform } from 'react-native'
@@ -14,11 +15,28 @@ import ChatScreen from './screens/ChatScreen'
 import TasksScreen from './screens/TasksScreen'
 import AnnouncementsScreen from './screens/AnnouncementsScreen'
 import ProfileScreen from './screens/ProfileScreen'
+import AdminScreen from './screens/AdminScreen'
 
 const Tab = createBottomTabNavigator()
 
 function AppContent() {
   const { user, loading } = useAuth()
+  const [isUserAdmin, setIsUserAdmin] = React.useState(false)
+  
+  React.useEffect(() => {
+    const checkAdmin = async () => {
+      if (user) {
+        try {
+          const { isAdmin } = await import('./services/adminService')
+          const admin = await isAdmin(user.id)
+          setIsUserAdmin(admin)
+        } catch (error) {
+          console.error('Error checking admin status:', error)
+        }
+      }
+    }
+    checkAdmin()
+  }, [user])
 
   if (loading) {
     return (
@@ -67,6 +85,8 @@ function AppContent() {
                 iconName = focused ? 'megaphone' : 'megaphone-outline'
               } else if (route.name === 'Profile') {
                 iconName = focused ? 'person-circle' : 'person-circle-outline'
+              } else if (route.name === 'Admin') {
+                iconName = focused ? 'shield' : 'shield-outline'
               }
 
               return (
@@ -121,6 +141,15 @@ function AppContent() {
               tabBarLabel: 'Profile',
             }}
           />
+          {isUserAdmin && (
+            <Tab.Screen 
+              name="Admin" 
+              component={AdminScreen}
+              options={{
+                tabBarLabel: 'Admin',
+              }}
+            />
+          )}
         </Tab.Navigator>
       ) : (
         <Auth />

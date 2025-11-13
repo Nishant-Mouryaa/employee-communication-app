@@ -17,8 +17,10 @@ export interface Profile {
   avatar_url?: string
   last_seen?: string
   is_online?: boolean
-    department?: string      // Add this
+  department?: string      // Add this
   position?: string
+  status?: string
+  role?: 'admin' | 'manager' | 'employee' | 'guest'
 }
 
 export type MessageAttachmentType = 'image' | 'video' | 'audio' | 'document' | 'other'

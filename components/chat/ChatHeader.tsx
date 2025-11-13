@@ -3,6 +3,7 @@ import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { IS_MOBILE } from '../../constants/chat'
+import { Profile } from '../../types/chat'
 import { getUserInitials } from '../../utils/chatHelpers'
 
 interface ChatHeaderProps {
@@ -12,12 +13,7 @@ interface ChatHeaderProps {
   onMembersPress?: () => void
   memberCount?: number
   isDM?: boolean
-  dmUser?: {
-    full_name: string
-    username: string
-    avatar_url?: string
-    is_online?: boolean
-  }
+  dmUser?: Pick<Profile, 'full_name' | 'username' | 'avatar_url' | 'is_online' | 'last_seen' | 'status'>
   showBackButton?: boolean // New prop for back button
   onBackPress?: () => void // New prop for back button press
 }
@@ -36,6 +32,23 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const displayName = isDM && dmUser 
     ? dmUser.full_name || dmUser.username 
     : channelName || 'Select a channel'
+
+  const getPresenceText = () => {
+    if (!dmUser) return ''
+    if (dmUser.status) return dmUser.status
+    if (dmUser.is_online) return 'Active now'
+    if (dmUser.last_seen) {
+      const lastSeenDate = new Date(dmUser.last_seen)
+      const now = new Date()
+      const diffMinutes = Math.floor((now.getTime() - lastSeenDate.getTime()) / (1000 * 60))
+      if (diffMinutes < 1) return 'Active just now'
+      if (diffMinutes < 60) return `Active ${diffMinutes}m ago`
+      const diffHours = Math.floor(diffMinutes / 60)
+      if (diffHours < 24) return `Active ${diffHours}h ago`
+      return `Active ${lastSeenDate.toLocaleDateString()}`
+    }
+    return 'Offline'
+  }
 
   return (
     <View style={styles.container}>
@@ -72,10 +85,28 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 <Text style={styles.channelName} numberOfLines={1}>
                   {displayName}
                 </Text>
-                {dmUser.is_online && (
+                {dmUser && (
                   <View style={styles.onlineStatusRow}>
-                    <View style={styles.onlineIndicator} />
-                    <Text style={styles.onlineText}>Active now</Text>
+                    <View
+                      style={[
+                        styles.onlineIndicator,
+                        dmUser.is_online ? styles.indicatorOnline : styles.indicatorOffline,
+                        dmUser.status && !dmUser.is_online ? styles.indicatorStatus : null
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.statusText,
+                        dmUser.status
+                          ? styles.statusTextCustom
+                          : dmUser.is_online
+                            ? styles.onlineText
+                            : styles.offlineText
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {getPresenceText()}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -184,13 +215,30 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10b981',
     marginRight: 4,
   },
-  onlineText: {
+  indicatorOnline: {
+    backgroundColor: '#10b981',
+  },
+  indicatorOffline: {
+    backgroundColor: '#94a3b8',
+  },
+  indicatorStatus: {
+    backgroundColor: '#0ea5e9',
+  },
+  statusText: {
     fontSize: 11,
-    color: '#10b981',
     fontWeight: '500',
+    color: '#64748b',
+  },
+  onlineText: {
+    color: '#10b981',
+  },
+  offlineText: {
+    color: '#94a3b8',
+  },
+  statusTextCustom: {
+    color: '#0ea5e9',
   },
   hashIcon: {
     fontSize: 18,

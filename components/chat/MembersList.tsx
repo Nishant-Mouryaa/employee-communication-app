@@ -67,7 +67,8 @@ export const MembersList: React.FC<MembersListProps> = ({
   const renderMember = ({ item }: { item: ChannelMember }) => {
     const isCurrentUser = item.user_id === currentUserId
     const displayName = isCurrentUser ? 'You' : item.profiles.full_name || item.profiles.username
-    const status = formatLastSeen(item.profiles.last_seen || null, item.profiles.is_online || false)
+    const presenceText = formatLastSeen(item.profiles.last_seen || null, item.profiles.is_online || false)
+    const customStatus = item.profiles.status
     
     // Get position and department
     const position = item.profiles.position
@@ -119,11 +120,19 @@ export const MembersList: React.FC<MembersListProps> = ({
             </View>
           )}
           
-          <Text style={[
-            styles.memberStatus,
-            item.profiles.is_online ? styles.statusOnline : styles.statusOffline
-          ]}>
-            {status}
+          {customStatus ? (
+            <Text style={styles.customStatus} numberOfLines={1}>
+              {customStatus}
+            </Text>
+          ) : null}
+
+          <Text
+            style={[
+              styles.memberStatus,
+              item.profiles.is_online ? styles.statusOnline : styles.statusOffline
+            ]}
+          >
+            {presenceText}
           </Text>
         </View>
 
@@ -293,6 +302,12 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '500',
     flex: 1,
+  },
+  customStatus: {
+    fontSize: 13,
+    color: '#0ea5e9',
+    fontWeight: '600',
+    marginBottom: 2,
   },
   memberStatus: {
     fontSize: 12,

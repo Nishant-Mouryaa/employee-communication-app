@@ -65,15 +65,28 @@ export const fetchMessages = async (channelId: string) => {
     readsByMessage.set(read.message_id, [...existing, read.user_id])
   })
 
-  // Fetch reactions and combine everything
+  // Fetch reactions and combine everything, decrypt if needed
   const messagesWithReactionsAndReads = await Promise.all(
     messages.map(async (message) => {
       const reactions = await getMessageReactions(message.id)
       const readBy = readsByMessage.get(message.id) || []
       const replyMessage = message.reply_to ? replyMessages.get(message.reply_to) : null
       
+      // Decrypt message if encrypted
+      let decryptedContent = message.content
+      if (message.is_encrypted && message.encryption_key) {
+        try {
+          const { decryptMessage } = await import('../utils/encryption')
+          decryptedContent = await decryptMessage(message.content, message.encryption_key)
+        } catch (error) {
+          console.warn('Decryption failed for message:', message.id, error)
+          decryptedContent = '[Encrypted message - decryption failed]'
+        }
+      }
+      
       return {
         ...message,
+        content: decryptedContent,
         attachments: message.attachments || [],
         reactions: reactions || [],
         read_by: readBy,
@@ -94,6 +107,13 @@ export const sendMessage = async (
   replyToId?: string,
   attachments?: MessageAttachment[]
 ): Promise<Message> => {
+  // Check access control
+  const { canAccessChannel } = await import('./accessControlService')
+  const accessCheck = await canAccessChannel(userId, channelId)
+  if (!accessCheck.allowed) {
+    throw new Error(accessCheck.reason || 'Access denied')
+  }
+
   // Extract mentions from content
   const mentionMatches = content.matchAll(/@(\w+)/g)
   const mentionedUsernames = Array.from(mentionMatches, m => m[1])
@@ -106,12 +126,32 @@ export const sendMessage = async (
   
   const mentionedUserIds = mentionedUsers?.map(u => u.id) || []
 
+  // Apply encryption if enabled (transport-level)
+  let encryptedContent = content
+  let encryptionKey: string | null = null
+  
+  try {
+    const { getComplianceSettings } = await import('./complianceService')
+    const settings = await getComplianceSettings()
+    
+    if (settings?.encryption_enabled) {
+      const { generateEncryptionKey, encryptMessage } = await import('../utils/encryption')
+      encryptionKey = await generateEncryptionKey()
+      encryptedContent = await encryptMessage(content, encryptionKey)
+    }
+  } catch (error) {
+    console.warn('Encryption failed, sending plaintext:', error)
+    // Continue with plaintext if encryption fails
+  }
+
   const messageData: any = {
-    content,
+    content: encryptedContent,
     channel_id: channelId,
     user_id: userId,
     mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null,
-    attachments: attachments && attachments.length > 0 ? attachments : null
+    attachments: attachments && attachments.length > 0 ? attachments : null,
+    encryption_key: encryptionKey, // Store key for decryption (in production, use proper key management)
+    is_encrypted: !!encryptionKey
   }
 
   if (replyToId) {

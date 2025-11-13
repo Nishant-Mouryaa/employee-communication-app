@@ -1,6 +1,6 @@
 // services/channelService.ts
 import { supabase } from '../lib/supabase'
-import { Channel, ChannelMember } from '../types/chat'
+import { Channel, ChannelMember, Profile } from '../types/chat'
 import { DEFAULT_CHANNELS } from '../constants/chat'
 
 export const fetchChannels = async (userId: string): Promise<Channel[]> => {
@@ -107,7 +107,8 @@ export const fetchChannelMembers = async (channelId: string): Promise<Map<string
         last_seen,
         is_online,
         department,
-        position
+        position,
+        status
       )
     `)
     .eq('channel_id', channelId)
@@ -127,7 +128,8 @@ export const fetchChannelMembers = async (channelId: string): Promise<Map<string
         last_seen: member.profiles.last_seen,
         is_online: member.profiles.is_online,
         department: member.profiles.department,
-        position: member.profiles.position
+        position: member.profiles.position,
+        status: member.profiles.status
       }
       membersMap.set(member.user_id, profile)
     }
@@ -151,7 +153,8 @@ export const fetchChannelMembersList = async (channelId: string): Promise<Channe
         last_seen,
         is_online,
         department,
-        position
+        position,
+        status
       )
     `)
     .eq('channel_id', channelId)

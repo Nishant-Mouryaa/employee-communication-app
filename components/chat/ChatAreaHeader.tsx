@@ -3,20 +3,16 @@ import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { getUserInitials } from '../../utils/chatHelpers'
+import { Profile } from '../../types/chat'
 
 interface ChatAreaHeaderProps {
   channelName: string
   channelDescription?: string
   memberCount?: number
   onInfoPress?: () => void
+  onMembersPress?: () => void
   isDM?: boolean
-  dmUser?: {
-    full_name: string
-    username: string
-    avatar_url?: string
-    is_online?: boolean
-    last_seen?: string
-  }
+  dmUser?: Pick<Profile, 'full_name' | 'username' | 'avatar_url' | 'is_online' | 'last_seen' | 'status'>
   onBack?: () => void // Add back button support
   showBackButton?: boolean // Add back button support
 }
@@ -26,20 +22,25 @@ export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
   channelDescription,
   memberCount = 0,
   onInfoPress,
+  onMembersPress,
   isDM = false,
   dmUser,
   onBack,
   showBackButton = false
 }) => {
-  const formatLastSeen = (lastSeen?: string, isOnline?: boolean) => {
-    if (isOnline) return 'Active now'
-    if (!lastSeen) return 'Offline'
-    
-    const date = new Date(lastSeen)
+  const formatPresence = (user?: ChatAreaHeaderProps['dmUser']) => {
+    if (!user) return ''
+    if (user.status) return user.status
+    if (user.is_online) return 'Active now'
+    if (!user.last_seen) return 'Offline'
+
+    const date = new Date(user.last_seen)
     const now = new Date()
-    const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
-    if (diffHours < 1) return 'Active recently'
+    const diffMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+
+    if (diffMinutes < 1) return 'Active just now'
+    if (diffMinutes < 60) return `Active ${diffMinutes}m ago`
+    const diffHours = Math.floor(diffMinutes / 60)
     if (diffHours < 24) return `Active ${diffHours}h ago`
     return `Active ${date.toLocaleDateString()}`
   }
@@ -74,10 +75,29 @@ export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
                 <Text style={styles.dmName}>
                   {dmUser.full_name || dmUser.username}
                 </Text>
-                {dmUser.is_online && <View style={styles.onlineIndicator} />}
+                <View
+                  style={[
+                    styles.onlineIndicator,
+                    dmUser.is_online
+                      ? styles.indicatorOnline
+                      : dmUser.status
+                        ? styles.indicatorStatus
+                        : styles.indicatorOffline
+                  ]}
+                />
               </View>
-              <Text style={styles.dmStatus}>
-                {formatLastSeen(dmUser.last_seen, dmUser.is_online)}
+              <Text
+                style={[
+                  styles.dmStatus,
+                  dmUser.status
+                    ? styles.dmStatusCustom
+                    : dmUser.is_online
+                      ? styles.dmStatusOnline
+                      : styles.dmStatusOffline
+                ]}
+                numberOfLines={1}
+              >
+                {formatPresence(dmUser)}
               </Text>
             </View>
           </View>
@@ -111,10 +131,18 @@ export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
           
           <View style={styles.headerActions}>
             {memberCount > 0 && (
-              <View style={styles.memberCount}>
+              <TouchableOpacity
+                style={[
+                  styles.memberCount,
+                  onMembersPress && styles.memberCountInteractive
+                ]}
+                onPress={onMembersPress}
+                activeOpacity={onMembersPress ? 0.7 : 1}
+                disabled={!onMembersPress}
+              >
                 <Ionicons name="people" size={16} color="#64748b" />
                 <Text style={styles.memberCountText}>{memberCount}</Text>
-              </View>
+              </TouchableOpacity>
             )}
             
             {onInfoPress && (
@@ -213,12 +241,30 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#10b981',
     marginLeft: 8,
+  },
+  indicatorOnline: {
+    backgroundColor: '#10b981',
+  },
+  indicatorOffline: {
+    backgroundColor: '#94a3b8',
+  },
+  indicatorStatus: {
+    backgroundColor: '#0ea5e9',
   },
   dmStatus: {
     fontSize: 14,
     color: '#64748b',
+    fontWeight: '500',
+  },
+  dmStatusOnline: {
+    color: '#10b981',
+  },
+  dmStatusOffline: {
+    color: '#94a3b8',
+  },
+  dmStatusCustom: {
+    color: '#0ea5e9',
   },
   headerActions: {
     flexDirection: 'row',
@@ -233,6 +279,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     backgroundColor: '#f8fafc',
     borderRadius: 6,
+  },
+  memberCountInteractive: {
+    backgroundColor: '#eef2ff',
   },
   memberCountText: {
     fontSize: 12,

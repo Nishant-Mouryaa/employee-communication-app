@@ -1,6 +1,6 @@
 // components/chat/MessageList.tsx
-import React, { useRef, useEffect } from 'react'
-import { FlatList, View, Text, StyleSheet, RefreshControl } from 'react-native'
+import React, { useRef, useEffect, useState } from 'react'
+import { FlatList, View, Text, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native'
 import { Message } from '../../types/chat'
 import { MessageBubble } from './MessageBubble'
 import { IS_MOBILE } from '../../constants/chat'
@@ -34,14 +34,24 @@ export const MessageList: React.FC<MessageListProps> = ({
   getReadReceiptText
 }) => {
   const flatListRef = useRef<FlatList>(null)
+  const prevMessageCountRef = useRef(messages.length)
+  const [isAtBottom, setIsAtBottom] = useState(true)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
+  const [hasNewMessages, setHasNewMessages] = useState(false)
 
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false })
-      }, 100)
+    if (messages.length > prevMessageCountRef.current) {
+      if (isAtBottom) {
+        requestAnimationFrame(() => {
+          flatListRef.current?.scrollToEnd({ animated: true })
+        })
+      } else {
+        setHasNewMessages(true)
+        setShowScrollToBottom(true)
+      }
     }
-  }, [messages.length])
+    prevMessageCountRef.current = messages.length
+  }, [messages.length, isAtBottom])
 
   const isOwnMessage = (messageUserId: string) => messageUserId === currentUserId
 
@@ -60,6 +70,33 @@ export const MessageList: React.FC<MessageListProps> = ({
     if (index !== -1) {
       flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 })
     }
+  }
+
+  const handleScroll = (event: any) => {
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent
+    const threshold = 80
+    const isNearBottom =
+      contentOffset.y + layoutMeasurement.height >= contentSize.height - threshold
+
+    setIsAtBottom(isNearBottom)
+    if (isNearBottom) {
+      setShowScrollToBottom(false)
+      setHasNewMessages(false)
+    }
+  }
+
+  const handleContentSizeChange = () => {
+    if (isAtBottom) {
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToEnd({ animated: true })
+      })
+    }
+  }
+
+  const handleScrollToBottomPress = () => {
+    flatListRef.current?.scrollToEnd({ animated: true })
+    setShowScrollToBottom(false)
+    setHasNewMessages(false)
   }
 
   const renderItem = ({ item, index }: { item: Message; index: number }) => {
@@ -93,41 +130,59 @@ export const MessageList: React.FC<MessageListProps> = ({
   }
 
   return (
-    <FlatList
-      ref={flatListRef}
-      data={messages}
-      keyExtractor={(item) => item.id}
-      style={styles.messagesList}
-      contentContainerStyle={IS_MOBILE ? styles.messagesContainerMobile : styles.messagesContainer}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl 
-          refreshing={refreshing} 
-          onRefresh={onRefresh}
-          tintColor="#6366F1"
-        />
-      }
-      renderItem={renderItem}
-      onScrollToIndexFailed={(info) => {
-        const wait = new Promise(resolve => setTimeout(resolve, 500))
-        wait.then(() => {
-          flatListRef.current?.scrollToIndex({ index: info.index, animated: true })
-        })
-      }}
-      ListEmptyComponent={
-        <View style={styles.emptyMessages}>
-          <Text style={styles.emptyMessageEmoji}>💬</Text>
-          <Text style={styles.emptyMessageText}>No messages yet</Text>
-          <Text style={styles.emptyMessageSubtext}>
-            Be the first to start the conversation in #{channelName}!
+    <View style={styles.listWrapper}>
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        keyExtractor={(item) => item.id}
+        style={styles.messagesList}
+        contentContainerStyle={IS_MOBILE ? styles.messagesContainerMobile : styles.messagesContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            tintColor="#6366F1"
+          />
+        }
+        renderItem={renderItem}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        onContentSizeChange={handleContentSizeChange}
+        onScrollToIndexFailed={(info) => {
+          const wait = new Promise(resolve => setTimeout(resolve, 500))
+          wait.then(() => {
+            flatListRef.current?.scrollToIndex({ index: info.index, animated: true })
+          })
+        }}
+        ListEmptyComponent={
+          <View style={styles.emptyMessages}>
+            <Text style={styles.emptyMessageEmoji}>💬</Text>
+            <Text style={styles.emptyMessageText}>No messages yet</Text>
+            <Text style={styles.emptyMessageSubtext}>
+              Be the first to start the conversation in #{channelName}!
+            </Text>
+          </View>
+        }
+      />
+
+      {showScrollToBottom && (
+        <TouchableOpacity style={styles.scrollButton} onPress={handleScrollToBottomPress} activeOpacity={0.85}>
+          <Text style={styles.scrollButtonArrow}>↓</Text>
+          <Text style={styles.scrollButtonText}>
+            {hasNewMessages ? 'New messages' : 'Scroll to bottom'}
           </Text>
-        </View>
-      }
-    />
+        </TouchableOpacity>
+      )}
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  listWrapper: {
+    flex: 1,
+    position: 'relative',
+  },
   messagesList: {
     flex: 1,
     backgroundColor: '#fafafa',
@@ -176,5 +231,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#94a3b8',
     textAlign: 'center',
+  },
+  scrollButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  scrollButtonArrow: {
+    fontSize: 16,
+    color: '#f8fafc',
+  },
+  scrollButtonText: {
+    fontSize: 13,
+    color: '#f8fafc',
+    fontWeight: '600',
   },
 })

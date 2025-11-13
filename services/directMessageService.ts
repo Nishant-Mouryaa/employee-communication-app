@@ -8,6 +8,14 @@ export const createOrGetDirectMessageChannel = async (
   targetProfile: Profile
 ): Promise<Channel> => {
   console.log('=== createOrGetDirectMessageChannel ===')
+  
+  // Check if user can message target user
+  const { canMessageUser } = await import('./accessControlService')
+  const permissionCheck = await canMessageUser(currentUserId, targetUserId)
+  
+  if (!permissionCheck.allowed) {
+    throw new Error(permissionCheck.reason || 'You do not have permission to message this user')
+  }
   console.log('Current User ID:', currentUserId)
   console.log('Target User ID:', targetUserId)
   

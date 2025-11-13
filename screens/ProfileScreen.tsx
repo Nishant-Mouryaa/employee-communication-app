@@ -6,6 +6,16 @@ import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 
+const STATUS_OPTIONS = [
+  'Available',
+  'In a meeting',
+  'On leave',
+  'Out sick',
+  'Commuting',
+  'Do not disturb',
+  'Away',
+]
+
 interface ProfileStats {
   announcements_count: number
   reactions_count: number
@@ -23,6 +33,7 @@ export default function ProfileScreen() {
   const [department, setDepartment] = useState('')
   const [position, setPosition] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
+  const [status, setStatus] = useState('')
   const [bio, setBio] = useState('')
   const [phone, setPhone] = useState('')
   const [location, setLocation] = useState('')
@@ -38,6 +49,7 @@ export default function ProfileScreen() {
     fullName: '',
     department: '',
     position: '',
+    status: '',
     bio: '',
     phone: '',
     location: '',
@@ -58,7 +70,7 @@ export default function ProfileScreen() {
 
       const { data, error, status } = await supabase
         .from('profiles')
-        .select(`username, full_name, department, position, avatar_url, bio, phone, location`)
+        .select(`username, full_name, department, position, avatar_url, bio, phone, location, status`)
         .eq('id', user.id)
         .single()
       
@@ -73,6 +85,7 @@ export default function ProfileScreen() {
           department: data.department || '',
           position: data.position || '',
           avatarUrl: data.avatar_url || '',
+          status: data.status || '',
           bio: data.bio || '',
           phone: data.phone || '',
           location: data.location || ''
@@ -83,6 +96,7 @@ export default function ProfileScreen() {
         setDepartment(profileData.department)
         setPosition(profileData.position)
         setAvatarUrl(profileData.avatarUrl)
+        setStatus(profileData.status)
         setBio(profileData.bio)
         setPhone(profileData.phone)
         setLocation(profileData.location)
@@ -156,6 +170,7 @@ async function updateProfile() {
       department: department.trim(),
       position: position.trim(),
       avatar_url: avatarUrl,
+      status: status.trim() || null,
       bio: bio.trim(),
       phone: phone.trim(),
       location: location.trim(),
@@ -179,6 +194,7 @@ async function updateProfile() {
       fullName,
       department,
       position,
+      status,
       bio,
       phone,
       location,
@@ -206,6 +222,7 @@ async function updateProfile() {
     setFullName(originalValues.fullName)
     setDepartment(originalValues.department)
     setPosition(originalValues.position)
+    setStatus(originalValues.status)
     setBio(originalValues.bio)
     setPhone(originalValues.phone)
     setLocation(originalValues.location)
@@ -281,15 +298,15 @@ async function updateProfile() {
         throw uploadError
       }
 
-      const { data: publicUrlResult, error: publicUrlError } = supabase.storage
+      const { data: publicUrlData } = supabase.storage
         .from('profile-images')
         .getPublicUrl(filePath)
 
-      if (publicUrlError) {
-        throw publicUrlError
+      if (!publicUrlData?.publicUrl) {
+        throw new Error('Unable to retrieve profile image URL')
       }
 
-      setAvatarUrl(publicUrlResult.publicUrl)
+      setAvatarUrl(publicUrlData.publicUrl)
       Alert.alert('Success', 'Profile picture uploaded!')
       setIsEditing(true)
     } catch (error) {
@@ -324,12 +341,58 @@ async function updateProfile() {
       fullName !== originalValues.fullName ||
       department !== originalValues.department ||
       position !== originalValues.position ||
+      status !== originalValues.status ||
       bio !== originalValues.bio ||
       phone !== originalValues.phone ||
       location !== originalValues.location ||
       avatarUrl !== originalValues.avatarUrl
     )
   }
+
+  const renderStatusOptions = () => (
+    <View style={styles.statusContainer}>
+      <Text style={styles.label}>Status</Text>
+      <View style={styles.statusGrid}>
+        {STATUS_OPTIONS.map(option => {
+          const isSelected = status === option
+          return (
+            <TouchableOpacity
+              key={option}
+              style={[
+                styles.statusChip,
+                isSelected && styles.statusChipSelected,
+                !isEditing && styles.statusChipDisabled
+              ]}
+              disabled={!isEditing}
+              onPress={() => {
+                setStatus(prev => (prev === option ? '' : option))
+                if (!isEditing) setIsEditing(true)
+              }}
+            >
+              <Text style={[
+                styles.statusChipText,
+                isSelected && styles.statusChipTextSelected
+              ]}>
+                {option}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+      {status ? (
+        <TouchableOpacity
+          style={styles.clearStatusButton}
+          onPress={() => {
+            setStatus('')
+            if (!isEditing) setIsEditing(true)
+          }}
+          disabled={!isEditing}
+        >
+          <Text style={styles.clearStatusText}>Clear status</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  )
 
   if (!user) {
     return (
@@ -563,6 +626,7 @@ async function updateProfile() {
         </View>
 
         <View style={styles.fullWidthFields}>
+          {renderStatusOptions()}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Phone</Text>
             <Input
@@ -975,6 +1039,46 @@ const styles = StyleSheet.create({
   },
   fullWidthFields: {
     paddingHorizontal: 20,
+  },
+  statusContainer: {
+    marginBottom: 20,
+  },
+  statusGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  statusChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  statusChipSelected: {
+    backgroundColor: '#6366F1',
+    borderColor: '#6366F1',
+  },
+  statusChipDisabled: {
+    opacity: 0.6,
+  },
+  statusChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  statusChipTextSelected: {
+    color: 'white',
+  },
+  clearStatusButton: {
+    marginTop: 8,
+  },
+  clearStatusText: {
+    fontSize: 12,
+    color: '#6366F1',
+    fontWeight: '600',
   },
   label: {
     fontSize: 13,
