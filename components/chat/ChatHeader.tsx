@@ -11,6 +11,7 @@ interface ChatHeaderProps {
   unreadCount: number
   onChannelPress: () => void
   onMembersPress?: () => void
+  onSearchPress?: () => void
   memberCount?: number
   isDM?: boolean
   dmUser?: Pick<Profile, 'full_name' | 'username' | 'avatar_url' | 'is_online' | 'last_seen' | 'status'>
@@ -23,6 +24,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   unreadCount,
   onChannelPress,
   onMembersPress,
+  onSearchPress,
   memberCount,
   isDM = false,
   dmUser,
@@ -129,6 +131,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
       {/* Right Section - Actions */}
       <View style={styles.actions}>
+        {onSearchPress && (
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={onSearchPress}
+          >
+            <Ionicons name="search" size={20} color="#64748b" />
+          </TouchableOpacity>
+        )}
+        
         {onMembersPress && !isDM && memberCount !== undefined && (
           <TouchableOpacity 
             style={styles.actionButton}

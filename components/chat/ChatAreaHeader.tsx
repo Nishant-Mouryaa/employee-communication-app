@@ -11,6 +11,7 @@ interface ChatAreaHeaderProps {
   memberCount?: number
   onInfoPress?: () => void
   onMembersPress?: () => void
+  onSearchPress?: () => void
   isDM?: boolean
   dmUser?: Pick<Profile, 'full_name' | 'username' | 'avatar_url' | 'is_online' | 'last_seen' | 'status'>
   onBack?: () => void // Add back button support
@@ -23,6 +24,7 @@ export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
   memberCount = 0,
   onInfoPress,
   onMembersPress,
+  onSearchPress,
   isDM = false,
   dmUser,
   onBack,
@@ -102,6 +104,11 @@ export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
             </View>
           </View>
           
+          {onSearchPress && (
+            <TouchableOpacity style={styles.infoButton} onPress={onSearchPress}>
+              <Ionicons name="search" size={20} color="#64748b" />
+            </TouchableOpacity>
+          )}
           {onInfoPress && (
             <TouchableOpacity style={styles.infoButton} onPress={onInfoPress}>
               <Ionicons name="information-circle-outline" size={20} color="#64748b" />
@@ -145,6 +152,11 @@ export const ChatAreaHeader: React.FC<ChatAreaHeaderProps> = ({
               </TouchableOpacity>
             )}
             
+            {onSearchPress && (
+              <TouchableOpacity style={styles.infoButton} onPress={onSearchPress}>
+                <Ionicons name="search" size={20} color="#64748b" />
+              </TouchableOpacity>
+            )}
             {onInfoPress && (
               <TouchableOpacity style={styles.infoButton} onPress={onInfoPress}>
                 <Ionicons name="information-circle-outline" size={20} color="#64748b" />

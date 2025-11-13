@@ -147,7 +147,7 @@ const loadChannels = useCallback(async () => {
     if (!userId) return
 
     try {
-      const messagesData = await fetchMessages(channelId)
+      const messagesData = await fetchMessages(channelId, userId)
       setState(prev => ({ ...prev, messages: messagesData }))
       await markMessagesAsRead(channelId, userId)
     } catch (error) {

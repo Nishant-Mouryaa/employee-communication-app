@@ -3,12 +3,12 @@ import { supabase } from '../lib/supabase'
 import { Message, MessageAttachment } from '../types/chat'
 import { getMessageReactions } from './reactionService'
 
-export const fetchMessages = async (channelId: string) => {
+export const fetchMessages = async (channelId: string, userId?: string) => {
   const { data: messages, error } = await supabase
     .from('chat_messages')
     .select(`
       *,
-      profiles (
+      profiles!fk_chat_messages_user_id (
         id,
         username,
         full_name,
@@ -34,7 +34,7 @@ export const fetchMessages = async (channelId: string) => {
       .from('chat_messages')
       .select(`
         *,
-        profiles (
+        profiles!fk_chat_messages_user_id (
           id,
           username,
           full_name,
@@ -65,6 +65,18 @@ export const fetchMessages = async (channelId: string) => {
     readsByMessage.set(read.message_id, [...existing, read.user_id])
   })
 
+  // Fetch starred status for current user if provided
+  let starredMessageIds = new Set<string>()
+  if (userId) {
+    const { data: bookmarks } = await supabase
+      .from('message_bookmarks')
+      .select('message_id')
+      .eq('user_id', userId)
+      .in('message_id', messages.map(m => m.id))
+    
+    starredMessageIds = new Set(bookmarks?.map(b => b.message_id) || [])
+  }
+
   // Fetch reactions and combine everything, decrypt if needed
   const messagesWithReactionsAndReads = await Promise.all(
     messages.map(async (message) => {
@@ -91,7 +103,8 @@ export const fetchMessages = async (channelId: string) => {
         reactions: reactions || [],
         read_by: readBy,
         read_count: readBy.length,
-        reply_message: replyMessage
+        reply_message: replyMessage,
+        is_starred: starredMessageIds.has(message.id)
       }
     })
   )

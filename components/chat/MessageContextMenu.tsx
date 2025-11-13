@@ -12,6 +12,13 @@ interface MessageContextMenuProps {
   onEdit?: () => void
   onReact: () => void
   onReply?: () => void
+  onStar?: () => void
+  onPin?: () => void
+  onConvertToTask?: () => void
+  onCreateMeeting?: () => void
+  isStarred?: boolean
+  isPinned?: boolean
+  canPin?: boolean
 }
 
 export const MessageContextMenu: React.FC<MessageContextMenuProps> = ({
@@ -24,6 +31,13 @@ export const MessageContextMenu: React.FC<MessageContextMenuProps> = ({
   onEdit,
   onReact,
   onReply,
+  onStar,
+  onPin,
+  onConvertToTask,
+  onCreateMeeting,
+  isStarred,
+  isPinned,
+  canPin,
 }) => {
   if (!visible) return null
 
@@ -69,6 +83,58 @@ export const MessageContextMenu: React.FC<MessageContextMenuProps> = ({
             <Text style={styles.menuIcon}>😀</Text>
             <Text style={styles.menuText}>Add Reaction</Text>
           </Pressable>
+
+          {onStar && (
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                onStar()
+                onClose()
+              }}
+            >
+              <Text style={styles.menuIcon}>{isStarred ? '⭐' : '☆'}</Text>
+              <Text style={styles.menuText}>{isStarred ? 'Unstar' : 'Star'}</Text>
+            </Pressable>
+          )}
+
+          {onPin && canPin && (
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                onPin()
+                onClose()
+              }}
+            >
+              <Text style={styles.menuIcon}>{isPinned ? '📌' : '📍'}</Text>
+              <Text style={styles.menuText}>{isPinned ? 'Unpin' : 'Pin'}</Text>
+            </Pressable>
+          )}
+
+          {onConvertToTask && (
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                onConvertToTask()
+                onClose()
+              }}
+            >
+              <Text style={styles.menuIcon}>✅</Text>
+              <Text style={styles.menuText}>Convert to Task</Text>
+            </Pressable>
+          )}
+
+          {onCreateMeeting && (
+            <Pressable 
+              style={styles.menuItem}
+              onPress={() => {
+                onCreateMeeting()
+                onClose()
+              }}
+            >
+              <Text style={styles.menuIcon}>📅</Text>
+              <Text style={styles.menuText}>Create Meeting</Text>
+            </Pressable>
+          )}
 
           {isOwnMessage && (
             <>

@@ -33,7 +33,12 @@ import {
   LoadingState,
   MembersList,
   EditMessageModal,
+  SearchModal,
+  ConvertToTaskModal,
+  MeetingInviteModal,
 } from '../components/chat'
+import { starMessage, unstarMessage, isMessageStarred } from '../services/messageBookmarkService'
+import { pinMessage, unpinMessage, getPinnedMessage } from '../services/messagePinService'
 import { TouchableOpacity, Text } from 'react-native'
 
 export default function ChatScreen() {
@@ -50,6 +55,13 @@ export default function ChatScreen() {
   const [showConversationList, setShowConversationList] = useState(true) // New state for WhatsApp-like navigation
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
   const [uploadingAttachments, setUploadingAttachments] = useState(false)
+  const [showSearchModal, setShowSearchModal] = useState(false)
+  const [pinnedMessage, setPinnedMessage] = useState<Message | null>(null)
+  const [canPin, setCanPin] = useState(false)
+  const [showConvertToTaskModal, setShowConvertToTaskModal] = useState(false)
+  const [messageToConvert, setMessageToConvert] = useState<Message | null>(null)
+  const [showMeetingModal, setShowMeetingModal] = useState(false)
+  const [messageForMeeting, setMessageForMeeting] = useState<Message | null>(null)
 
   const handleReply = useCallback((message: Message) => {
     setReplyingTo(message)
@@ -270,6 +282,16 @@ export default function ChatScreen() {
     if (selectedChannel?.id && user?.id) {
       loadMessages(selectedChannel.id)
       loadChannelMembers(selectedChannel.id)
+      
+      // Load pinned message
+      getPinnedMessage(selectedChannel.id).then(setPinnedMessage).catch(console.error)
+      
+      // Check if user can pin (admin or manager)
+      if (user.user_metadata?.role === 'admin' || user.user_metadata?.role === 'manager') {
+        setCanPin(true)
+      } else {
+        setCanPin(false)
+      }
     }
   }, [selectedChannel?.id, user?.id, loadMessages, loadChannelMembers])
 
@@ -393,6 +415,65 @@ export default function ChatScreen() {
     setShowMembersList(false)
   }, [])
 
+  const handleStarMessage = useCallback(async (messageId: string) => {
+    if (!user?.id) return
+    
+    try {
+      const isStarred = await isMessageStarred(messageId, user.id)
+      if (isStarred) {
+        await unstarMessage(messageId, user.id)
+      } else {
+        await starMessage(messageId, user.id)
+      }
+      // Refresh messages to update star status
+      if (selectedChannel?.id) {
+        loadMessages(selectedChannel.id)
+      }
+    } catch (error) {
+      console.error('Error toggling star:', error)
+      Alert.alert('Error', 'Failed to update star status')
+    }
+  }, [user?.id, selectedChannel?.id, loadMessages])
+
+  const handlePinMessage = useCallback(async (messageId: string) => {
+    if (!user?.id || !selectedChannel?.id) return
+    
+    try {
+      const message = messages.find(m => m.id === messageId)
+      if (message?.is_pinned) {
+        await unpinMessage(messageId, user.id)
+      } else {
+        await pinMessage(messageId, selectedChannel.id, user.id)
+      }
+      // Refresh messages to update pin status
+      loadMessages(selectedChannel.id)
+      getPinnedMessage(selectedChannel.id).then(setPinnedMessage).catch(console.error)
+    } catch (error) {
+      console.error('Error toggling pin:', error)
+      Alert.alert('Error', (error as Error).message || 'Failed to update pin status')
+    }
+  }, [user?.id, selectedChannel?.id, messages, loadMessages])
+
+  const handleSearchPress = useCallback(() => {
+    setShowSearchModal(true)
+  }, [])
+
+  const handleSearchMessagePress = useCallback((messageId: string) => {
+    // Scroll to message when clicked from search or pinned banner
+    // This will be handled by MessageList via onPinnedMessagePress
+    setShowSearchModal(false)
+  }, [])
+
+  const handleConvertToTask = useCallback((message: Message) => {
+    setMessageToConvert(message)
+    setShowConvertToTaskModal(true)
+  }, [])
+
+  const handleCreateMeeting = useCallback((message: Message) => {
+    setMessageForMeeting(message)
+    setShowMeetingModal(true)
+  }, [])
+
   // New handler for back navigation from chat to conversation list
   const handleBackToConversations = useCallback(() => {
     setShowConversationList(true)
@@ -459,11 +540,12 @@ export default function ChatScreen() {
                 unreadCount={getTotalUnreadCount()}
                 onChannelPress={handleBackToConversations} // Back to conversation list
                 onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
+                onSearchPress={handleSearchPress}
                 memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
                 isDM={selectedChannel?.type === 'direct'}
                 dmUser={selectedChannel?.dm_user}
-                  showBackButton={true} // Add this
-  onBackPress={handleBackToConversations} // Add this
+                showBackButton={true} // Add this
+                onBackPress={handleBackToConversations} // Add this
               />
 
               {showMembersList ? (
@@ -485,6 +567,7 @@ export default function ChatScreen() {
                         ? `${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
                         : selectedChannel.name
                     }
+                    channelId={selectedChannel.id}
                     refreshing={refreshing}
                     onRefresh={refresh}
                     onDeleteMessage={handleDeleteMessage}
@@ -492,6 +575,11 @@ export default function ChatScreen() {
                     onReaction={handleReaction}
                     onReply={handleReply}
                     getReadReceiptText={getMessageReadReceiptText}
+                    onStar={handleStarMessage}
+                    onPin={handlePinMessage}
+                    canPin={canPin}
+                    pinnedMessage={pinnedMessage}
+                    onPinnedMessagePress={handleSearchMessagePress}
                   />
 
                   <TypingIndicator typingUsers={typingUsers} />
@@ -525,6 +613,43 @@ export default function ChatScreen() {
                 message={editingMessage}
                 onClose={handleCloseEdit}
                 onSave={handleSaveEdit}
+              />
+
+              <SearchModal
+                visible={showSearchModal}
+                onClose={() => setShowSearchModal(false)}
+                channelId={selectedChannel?.id}
+                userId={user.id}
+                onMessagePress={handleSearchMessagePress}
+              />
+
+              <ConvertToTaskModal
+                visible={showConvertToTaskModal}
+                message={messageToConvert}
+                currentUserId={user.id}
+                channelMembers={channelMembers}
+                onClose={() => {
+                  setShowConvertToTaskModal(false)
+                  setMessageToConvert(null)
+                }}
+                onSuccess={() => {
+                  // Optionally refresh tasks or show notification
+                }}
+              />
+
+              <MeetingInviteModal
+                visible={showMeetingModal}
+                message={messageForMeeting}
+                currentUserId={user.id}
+                channelMembers={channelMembers}
+                channelId={selectedChannel?.id}
+                onClose={() => {
+                  setShowMeetingModal(false)
+                  setMessageForMeeting(null)
+                }}
+                onSuccess={() => {
+                  // Optionally refresh calendar or show notification
+                }}
               />
             </>
           )}
@@ -574,14 +699,15 @@ export default function ChatScreen() {
           {selectedChannel ? (
             <>
           <ChatAreaHeader   
-  channelName={selectedChannel.name}
-  onBack={handleBackToConversations}
-  showBackButton={true}
-  onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
-  memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
-  isDM={selectedChannel?.type === 'direct'}
-  dmUser={selectedChannel?.dm_user}
-/>
+            channelName={selectedChannel.name}
+            onBack={handleBackToConversations}
+            showBackButton={true}
+            onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
+            onSearchPress={handleSearchPress}
+            memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
+            isDM={selectedChannel?.type === 'direct'}
+            dmUser={selectedChannel?.dm_user}
+          />
 
               <MessageList
                 messages={messages}
@@ -592,11 +718,21 @@ export default function ChatScreen() {
                     ? `${selectedChannel.dm_user.full_name || selectedChannel.dm_user.username}`
                     : selectedChannel.name
                 }
+                channelId={selectedChannel.id}
                 refreshing={refreshing}
                 onRefresh={refresh}
                 onDeleteMessage={handleDeleteMessage}
+                onEditMessage={handleEditMessage}
                 onReaction={handleReaction}
+                onReply={handleReply}
                 getReadReceiptText={getMessageReadReceiptText}
+                onStar={handleStarMessage}
+                onPin={handlePinMessage}
+                onConvertToTask={handleConvertToTask}
+                onCreateMeeting={handleCreateMeeting}
+                canPin={canPin}
+                pinnedMessage={pinnedMessage}
+                onPinnedMessagePress={handleSearchMessagePress}
               />
 
               <TypingIndicator typingUsers={typingUsers} />
@@ -649,6 +785,43 @@ export default function ChatScreen() {
         message={editingMessage}
         onClose={handleCloseEdit}
         onSave={handleSaveEdit}
+      />
+
+      <SearchModal
+        visible={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        channelId={selectedChannel?.id}
+        userId={user?.id || ''}
+        onMessagePress={handleSearchMessagePress}
+      />
+
+      <ConvertToTaskModal
+        visible={showConvertToTaskModal}
+        message={messageToConvert}
+        currentUserId={user?.id || ''}
+        channelMembers={channelMembers}
+        onClose={() => {
+          setShowConvertToTaskModal(false)
+          setMessageToConvert(null)
+        }}
+        onSuccess={() => {
+          // Optionally refresh tasks or show notification
+        }}
+      />
+
+      <MeetingInviteModal
+        visible={showMeetingModal}
+        message={messageForMeeting}
+        currentUserId={user?.id || ''}
+        channelMembers={channelMembers}
+        channelId={selectedChannel?.id}
+        onClose={() => {
+          setShowMeetingModal(false)
+          setMessageForMeeting(null)
+        }}
+        onSuccess={() => {
+          // Optionally refresh calendar or show notification
+        }}
       />
     </KeyboardAvoidingView>
   )

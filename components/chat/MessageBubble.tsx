@@ -9,6 +9,7 @@ import { ReactionPicker } from './ReactionPicker'
 import { MessageContextMenu } from './MessageContextMenu'
 import { ReplyPreview } from './ReplyPreview'
 import { MessageText } from './MessageText'
+import { MessageLinkPreviews } from './LinkPreview'
 
 interface MessageBubbleProps {
   message: Message
@@ -22,6 +23,11 @@ interface MessageBubbleProps {
   readReceiptText?: string
   showReadReceipt?: boolean
   currentUserId?: string
+  onStar?: (messageId: string) => void
+  onPin?: (messageId: string) => void
+  onConvertToTask?: (message: Message) => void
+  onCreateMeeting?: (message: Message) => void
+  canPin?: boolean
 }
 
 
@@ -36,7 +42,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onReplyPress,
   readReceiptText,
   showReadReceipt,
-  currentUserId
+  currentUserId,
+  onStar,
+  onPin,
+  onConvertToTask,
+  onCreateMeeting,
+  canPin,
 }) => {
   const [showContextMenu, setShowContextMenu] = useState(false)
   const [showReactionPicker, setShowReactionPicker] = useState(false)
@@ -77,6 +88,30 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const handleReply = () => {
     if (onReply) {
       onReply(message)
+    }
+  }
+
+  const handleStar = () => {
+    if (onStar) {
+      onStar(message.id)
+    }
+  }
+
+  const handlePin = () => {
+    if (onPin) {
+      onPin(message.id)
+    }
+  }
+
+  const handleConvertToTask = () => {
+    if (onConvertToTask) {
+      onConvertToTask(message)
+    }
+  }
+
+  const handleCreateMeeting = () => {
+    if (onCreateMeeting) {
+      onCreateMeeting(message)
     }
   }
 
@@ -193,8 +228,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               <View style={[
                 styles.messageBubble,
                 isOwn ? styles.ownMessageBubble : styles.otherMessageBubble,
-                isPressed && styles.messageBubblePressed
+                isPressed && styles.messageBubblePressed,
+                message.is_pinned && styles.pinnedMessage
               ]}>
+                {message.is_pinned && (
+                  <View style={styles.pinnedIndicator}>
+                    <Text style={styles.pinnedIcon}>📌</Text>
+                    <Text style={styles.pinnedText}>Pinned</Text>
+                  </View>
+                )}
                 {!isOwn && (
                   <Text style={styles.userName}>
                     {message.profiles?.full_name || message.profiles?.username || 'Unknown User'}
@@ -217,7 +259,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 )}
 
                 {message.content ? (
-                  <MessageText content={message.content} style={styles.messageText} />
+                  <>
+                    <MessageText content={message.content} style={styles.messageText} />
+                    <MessageLinkPreviews content={message.content} />
+                  </>
                 ) : null}
                 
                 <View style={styles.messageFooter}>
@@ -267,6 +312,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         onCopy={handleCopy}
         onEdit={isOwn ? handleEdit : undefined}
         onDelete={isOwn ? handleDelete : undefined}
+        onStar={onStar ? handleStar : undefined}
+        onPin={onPin ? handlePin : undefined}
+        onConvertToTask={onConvertToTask ? handleConvertToTask : undefined}
+        onCreateMeeting={onCreateMeeting ? handleCreateMeeting : undefined}
+        isStarred={message.is_starred}
+        isPinned={message.is_pinned}
+        canPin={canPin}
       />
 
       <ReactionPicker
@@ -519,5 +571,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     marginTop: 2,
+  },
+  pinnedMessage: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#6366F1',
+    paddingLeft: 13,
+  },
+  pinnedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  pinnedIcon: {
+    fontSize: 12,
+    marginRight: 4,
+  },
+  pinnedText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6366F1',
   },
 })

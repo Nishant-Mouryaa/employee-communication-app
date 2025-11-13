@@ -71,6 +71,10 @@ export interface Message {
   is_edited?: boolean
   mentions?: string[]
   attachments?: MessageAttachment[]
+  is_pinned?: boolean
+  pinned_by?: string
+  pinned_at?: string
+  is_starred?: boolean // User's personal star
 }
 
 export interface TypingUser {

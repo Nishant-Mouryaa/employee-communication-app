@@ -3,14 +3,18 @@ import React, { useRef, useEffect, useState } from 'react'
 import { FlatList, View, Text, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native'
 import { Message } from '../../types/chat'
 import { MessageBubble } from './MessageBubble'
+import { UnreadSeparator } from './UnreadSeparator'
+import { PinnedMessageBanner } from './PinnedMessageBanner'
 import { IS_MOBILE } from '../../constants/chat'
 import { shouldShowDateHeader, formatDateHeader } from '../../utils/chatHelpers'
+import { getLastReadTimestamp, isMessageUnread } from '../../services/unreadSeparatorService'
 
 interface MessageListProps {
   messages: Message[]
   currentUserId: string
   channelMembers: Map<string, any>
   channelName: string
+  channelId: string
   refreshing: boolean
   onRefresh: () => void
   onDeleteMessage: (messageId: string, isOwn: boolean) => void
@@ -18,6 +22,13 @@ interface MessageListProps {
   onReaction: (messageId: string, emoji: string) => void
   onReply?: (message: Message) => void
   getReadReceiptText: (message: Message) => string
+  onStar?: (messageId: string) => void
+  onPin?: (messageId: string) => void
+  onConvertToTask?: (message: Message) => void
+  onCreateMeeting?: (message: Message) => void
+  canPin?: boolean
+  pinnedMessage?: Message | null
+  onPinnedMessagePress?: (messageId: string) => void
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -25,19 +36,30 @@ export const MessageList: React.FC<MessageListProps> = ({
   currentUserId,
   channelMembers,
   channelName,
+  channelId,
   refreshing,
   onRefresh,
   onDeleteMessage,
   onEditMessage,
   onReaction,
   onReply,
-  getReadReceiptText
+  getReadReceiptText,
+  onStar,
+  onPin,
+  onConvertToTask,
+  onCreateMeeting,
+  canPin,
+  pinnedMessage,
+  onPinnedMessagePress,
 }) => {
   const flatListRef = useRef<FlatList>(null)
   const prevMessageCountRef = useRef(messages.length)
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [hasNewMessages, setHasNewMessages] = useState(false)
+  const [lastReadTimestamp, setLastReadTimestamp] = useState<string | null>(null)
+  const [unreadMessageIndex, setUnreadMessageIndex] = useState<number | null>(null)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     if (messages.length > prevMessageCountRef.current) {
@@ -52,6 +74,39 @@ export const MessageList: React.FC<MessageListProps> = ({
     }
     prevMessageCountRef.current = messages.length
   }, [messages.length, isAtBottom])
+
+  // Load last read timestamp and determine unread separator position
+  useEffect(() => {
+    const loadUnreadSeparator = async () => {
+      if (!channelId || !currentUserId) return
+
+      const timestamp = await getLastReadTimestamp(currentUserId, channelId)
+      setLastReadTimestamp(timestamp)
+
+      if (timestamp && messages.length > 0) {
+        // Find first unread message
+        let unreadIndex = -1
+        let count = 0
+        for (let i = 0; i < messages.length; i++) {
+          const msg = messages[i]
+          const msgDate = new Date(msg.created_at)
+          const readDate = new Date(timestamp)
+          
+          if (msgDate > readDate && msg.user_id !== currentUserId) {
+            if (unreadIndex === -1) unreadIndex = i
+            count++
+          }
+        }
+        setUnreadMessageIndex(unreadIndex >= 0 ? unreadIndex : null)
+        setUnreadCount(count)
+      } else {
+        setUnreadMessageIndex(null)
+        setUnreadCount(0)
+      }
+    }
+
+    loadUnreadSeparator()
+  }, [channelId, currentUserId, messages])
 
   const isOwnMessage = (messageUserId: string) => messageUserId === currentUserId
 
@@ -68,7 +123,10 @@ export const MessageList: React.FC<MessageListProps> = ({
   const scrollToMessage = (messageId: string) => {
     const index = messages.findIndex(m => m.id === messageId)
     if (index !== -1) {
-      flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 })
+      // Use a small delay to ensure the list is rendered
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 })
+      }, 100)
     }
   }
 
@@ -102,6 +160,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   const renderItem = ({ item, index }: { item: Message; index: number }) => {
     const previousMessage = index > 0 ? messages[index - 1] : null
     const showDateHeader = shouldShowDateHeader(item, previousMessage)
+    const showUnreadSeparator = unreadMessageIndex === index
 
     return (
       <View>
@@ -112,25 +171,50 @@ export const MessageList: React.FC<MessageListProps> = ({
             </Text>
           </View>
         )}
+        {showUnreadSeparator && (
+          <UnreadSeparator unreadCount={unreadCount} />
+        )}
         <MessageBubble
-  message={item}
-  isOwn={isOwnMessage(item.user_id)}
-  onLongPress={() => onDeleteMessage(item.id, isOwnMessage(item.user_id))}
-  onReaction={onReaction}
-  onDelete={handleDelete}
-  onEdit={() => handleEdit(item)} // Pass the full message
-  onReply={onReply}
-  onReplyPress={scrollToMessage}
-  readReceiptText={getReadReceiptText(item)}
-  showReadReceipt={!item.id.startsWith('temp-')}
-  currentUserId={currentUserId}
-/>
+          message={item}
+          isOwn={isOwnMessage(item.user_id)}
+          onLongPress={() => onDeleteMessage(item.id, isOwnMessage(item.user_id))}
+          onReaction={onReaction}
+          onDelete={handleDelete}
+          onEdit={() => handleEdit(item)}
+          onReply={onReply}
+          onReplyPress={scrollToMessage}
+          readReceiptText={getReadReceiptText(item)}
+          showReadReceipt={!item.id.startsWith('temp-')}
+          currentUserId={currentUserId}
+          onStar={onStar}
+          onPin={onPin}
+          onConvertToTask={onConvertToTask}
+          onCreateMeeting={onCreateMeeting}
+          canPin={canPin}
+        />
       </View>
     )
   }
 
+  const handlePinnedMessagePress = () => {
+    if (pinnedMessage) {
+      // Scroll to the pinned message in the list
+      scrollToMessage(pinnedMessage.id)
+      // Also notify parent if handler provided
+      if (onPinnedMessagePress) {
+        onPinnedMessagePress(pinnedMessage.id)
+      }
+    }
+  }
+
   return (
     <View style={styles.listWrapper}>
+      {pinnedMessage && (
+        <PinnedMessageBanner
+          pinnedMessage={pinnedMessage}
+          onPress={handlePinnedMessagePress}
+        />
+      )}
       <FlatList
         ref={flatListRef}
         data={messages}
