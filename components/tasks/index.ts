@@ -1,0 +1,11 @@
+// components/tasks/index.ts
+export { TaskHeader } from './TaskHeader'
+export { TaskFilters } from './TaskFilters'
+export { TaskCard } from './TaskCard'
+export { TaskList } from './TaskList'
+export { AttachmentList } from './AttachmentList'
+export { CommentList } from './CommentList'
+export { CommentInput } from './CommentInput'
+export { LabelSelector } from './LabelSelector'
+export { AddTaskModal } from './AddTaskModal'
+export { TaskDetailsModal } from './TaskDetailsModal'
