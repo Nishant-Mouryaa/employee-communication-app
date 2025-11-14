@@ -577,6 +577,8 @@ export default function ChatScreen() {
                     getReadReceiptText={getMessageReadReceiptText}
                     onStar={handleStarMessage}
                     onPin={handlePinMessage}
+                    onConvertToTask={handleConvertToTask}
+                    onCreateMeeting={handleCreateMeeting}
                     canPin={canPin}
                     pinnedMessage={pinnedMessage}
                     onPinnedMessagePress={handleSearchMessagePress}

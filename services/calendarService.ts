@@ -35,28 +35,41 @@ export const createMeetingFromMessage = async (
       location: inviteData.location || null,
       channel_id: inviteData.channel_id || message.channel_id,
       message_id: inviteData.message_id || message.id,
-      reminder_minutes: inviteData.reminder_minutes || [15, 60], // Default reminders
+      reminder_minutes: inviteData.reminder_minutes || [15, 60],
     }
 
+    console.log('Creating meeting...');
     const { data: meetingData, error: meetingError } = await supabase
       .from('meetings')
       .insert([meeting])
       .select()
       .single()
 
-    if (meetingError) throw meetingError
+    if (meetingError) {
+      console.error('Meeting creation error:', meetingError);
+      throw meetingError;
+    }
 
-    // Add attendees
-    if (inviteData.attendees && inviteData.attendees.length > 0) {
-      const attendees = inviteData.attendees.map(attendeeId => ({
+    console.log('Meeting created, adding attendees...');
+    
+    // Add attendees - include the creator automatically
+    const allAttendees = [...new Set([userId, ...(inviteData.attendees || [])])]
+    
+    if (allAttendees.length > 0) {
+      const attendees = allAttendees.map(attendeeId => ({
         meeting_id: meetingData.id,
         user_id: attendeeId,
-        status: 'pending' as const,
+        status: attendeeId === userId ? 'accepted' as const : 'pending' as const,
       }))
 
-      await supabase
+      const { error: attendeesError } = await supabase
         .from('meeting_attendees')
         .insert(attendees)
+
+      if (attendeesError) {
+        console.error('Attendee insertion error:', attendeesError);
+        // Continue without throwing - meeting was created successfully
+      }
     }
 
     // Generate calendar link
@@ -150,16 +163,17 @@ export const sendMeetingReminder = async (
  */
 export const getUserMeetings = async (userId: string): Promise<any[]> => {
   try {
+    // Fixed query - use the correct relationship name
     const { data, error } = await supabase
       .from('meetings')
       .select(`
         *,
-        meeting_attendees!inner (
+        meeting_attendees (
           user_id,
           status
         )
       `)
-      .eq('meeting_attendees.user_id', userId)
+      .or(`created_by.eq.${userId},meeting_attendees.user_id.eq.${userId}`)
       .gte('start_time', new Date().toISOString())
       .order('start_time', { ascending: true })
 
@@ -172,3 +186,27 @@ export const getUserMeetings = async (userId: string): Promise<any[]> => {
   }
 }
 
+/**
+ * Update meeting attendance status
+ */
+export const updateAttendanceStatus = async (
+  meetingId: string,
+  userId: string,
+  status: 'accepted' | 'declined' | 'tentative'
+): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('meeting_attendees')
+      .update({
+        status,
+        responded_at: new Date().toISOString()
+      })
+      .eq('meeting_id', meetingId)
+      .eq('user_id', userId)
+
+    if (error) throw error
+  } catch (error) {
+    console.error('Error updating attendance status:', error)
+    throw error
+  }
+}
