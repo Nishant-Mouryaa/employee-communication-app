@@ -9,11 +9,16 @@ import {
   TextInput, 
   Alert,
   Modal,
-  ActivityIndicator
+  ActivityIndicator,
+  Linking,
+  Platform
 } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import DateTimePicker from '@react-native-community/datetimepicker'
+import * as DocumentPicker from 'expo-document-picker'
+
+
 
 interface Task {
   id: string
@@ -37,15 +42,36 @@ interface User {
   full_name: string
 }
 
+interface TaskAttachment {
+  id: string
+  task_id: string
+  file_name: string
+  file_path: string
+  file_size: number
+  file_type: string
+  uploaded_by: string
+  created_at: string
+}
+
+interface SelectedFile {
+  uri: string
+  name: string
+  size: number
+  mimeType: string
+}
+
 export default function TasksScreen() {
   const { user } = useAuth()
   const [tasks, setTasks] = useState<Task[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [attachments, setAttachments] = useState<Record<string, TaskAttachment[]>>({})
   const [loading, setLoading] = useState(true)
   const [addingTask, setAddingTask] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showUserSelector, setShowUserSelector] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
+  const [selectedTaskForAttachment, setSelectedTaskForAttachment] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'todo' | 'in-progress' | 'done'>('all')
 
   const [newTask, setNewTask] = useState({
@@ -54,7 +80,8 @@ export default function TasksScreen() {
     assigned_to: '',
     assigned_to_name: 'Select user...',
     due_date: new Date(),
-    priority: 'medium' as 'low' | 'medium' | 'high'
+    priority: 'medium' as 'low' | 'medium' | 'high',
+    attachments: [] as SelectedFile[]
   })
 
   useEffect(() => {
@@ -64,6 +91,15 @@ export default function TasksScreen() {
       setupRealtimeSubscription()
     }
   }, [user])
+
+  useEffect(() => {
+    // Fetch attachments for all tasks
+    if (tasks.length > 0) {
+      tasks.forEach(task => {
+        fetchAttachments(task.id)
+      })
+    }
+  }, [tasks])
 
   const fetchTasks = async () => {
     if (!user) return
@@ -79,7 +115,6 @@ export default function TasksScreen() {
         `)
         .order('created_at', { ascending: false })
 
-      // Apply filter
       if (filter !== 'all') {
         query = query.eq('status', filter)
       }
@@ -112,10 +147,29 @@ export default function TasksScreen() {
     }
   }
 
+  const fetchAttachments = async (taskId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('task_attachments')
+        .select('*')
+        .eq('task_id', taskId)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      setAttachments(prev => ({
+        ...prev,
+        [taskId]: data || []
+      }))
+    } catch (error) {
+      console.error('Error fetching attachments:', error)
+    }
+  }
+
   const setupRealtimeSubscription = () => {
     if (!user) return
 
-    const subscription = supabase
+    const tasksSubscription = supabase
       .channel('tasks-changes')
       .on(
         'postgres_changes',
@@ -125,15 +179,152 @@ export default function TasksScreen() {
           table: 'tasks'
         },
         () => {
-          fetchTasks() // Refresh tasks
+          fetchTasks()
+        }
+      )
+      .subscribe()
+
+    const attachmentsSubscription = supabase
+      .channel('attachments-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_attachments'
+        },
+        (payload) => {
+          if (payload.new && 'task_id' in payload.new) {
+            fetchAttachments(payload.new.task_id as string)
+          }
         }
       )
       .subscribe()
 
     return () => {
-      subscription.unsubscribe()
+      tasksSubscription.unsubscribe()
+      attachmentsSubscription.unsubscribe()
     }
   }
+
+const pickDocument = async () => {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: '*/*',
+      copyToCacheDirectory: true,
+      multiple: false
+    })
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const file = result.assets[0]
+      
+      // Check file size (max 10MB)
+      if (file.size && file.size > 10 * 1024 * 1024) {
+        Alert.alert('Error', 'File size must be less than 10MB')
+        return
+      }
+
+      const selectedFile: SelectedFile = {
+        uri: file.uri,
+        name: file.name,
+        size: file.size || 0,
+        mimeType: file.mimeType || 'application/octet-stream'
+      }
+
+      setNewTask(prev => ({
+        ...prev,
+        attachments: [...prev.attachments, selectedFile]
+      }))
+      
+      console.log('File selected:', selectedFile.name, 'Size:', selectedFile.size)
+    }
+  } catch (error) {
+    console.error('Error picking document:', error)
+    Alert.alert('Error', 'Failed to pick document')
+  }
+}
+
+  const removeAttachment = (index: number) => {
+    setNewTask(prev => ({
+      ...prev,
+      attachments: prev.attachments.filter((_, i) => i !== index)
+    }))
+  }
+
+
+
+const uploadFile = async (file: SelectedFile, taskId: string) => {
+  try {
+    if (!user) {
+      throw new Error('No user found')
+    }
+
+    console.log('Starting file upload:', file.name)
+
+    // Use fetch to get the file as arrayBuffer (same as ProfileScreen)
+    const response = await fetch(file.uri)
+    if (!response.ok) {
+      throw new Error('Failed to read selected file')
+    }
+
+    const arrayBuffer = response.arrayBuffer
+      ? await response.arrayBuffer()
+      : null
+
+    if (!arrayBuffer) {
+      throw new Error('Unable to process selected file')
+    }
+
+    console.log('File converted to arrayBuffer, size:', arrayBuffer.byteLength)
+
+    // Generate unique file path
+    const fileExt = file.name.split('.').pop() || 'file'
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
+    const filePath = `task-attachments/${taskId}/${fileName}`
+
+    console.log('Uploading to path:', filePath)
+
+    // Upload to Supabase Storage (same approach as ProfileScreen)
+    const { error: uploadError } = await supabase.storage
+      .from('attachments')
+      .upload(filePath, arrayBuffer, {
+        contentType: file.mimeType || 'application/octet-stream',
+        upsert: false
+      })
+
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError)
+      throw uploadError
+    }
+
+    console.log('File uploaded successfully')
+
+    // Save attachment record to database
+    const { error: dbError } = await supabase
+      .from('task_attachments')
+      .insert({
+        task_id: taskId,
+        file_name: file.name,
+        file_path: filePath,
+        file_size: file.size,
+        file_type: file.mimeType || 'application/octet-stream',
+        uploaded_by: user?.id
+      })
+
+    if (dbError) {
+      console.error('Database error:', dbError)
+      // Clean up uploaded file if database insert fails
+      await supabase.storage.from('attachment').remove([filePath])
+      throw dbError
+    }
+
+    console.log('Database record saved successfully')
+    return true
+  } catch (error) {
+    console.error('Error uploading file:', error)
+    throw error
+  }
+}
 
   const addTask = async () => {
     if (!newTask.title.trim() || !user) return
@@ -144,18 +335,29 @@ export default function TasksScreen() {
       const taskData = {
         title: newTask.title.trim(),
         description: newTask.description.trim(),
-        assigned_to: newTask.assigned_to || user.id, // Default to current user if not assigned
+        assigned_to: newTask.assigned_to || user.id,
         created_by: user.id,
         due_date: newTask.due_date.toISOString().split('T')[0],
         priority: newTask.priority,
         status: 'todo' as const
       }
 
-      const { error } = await supabase
+      const { data: taskResponse, error: taskError } = await supabase
         .from('tasks')
         .insert([taskData])
+        .select()
+        .single()
 
-      if (error) throw error
+      if (taskError) throw taskError
+
+      // Upload attachments if any
+      if (newTask.attachments.length > 0) {
+        setUploadingFile(true)
+        for (const file of newTask.attachments) {
+          await uploadFile(file, taskResponse.id)
+        }
+        setUploadingFile(false)
+      }
 
       // Reset form and close modal
       setNewTask({
@@ -164,7 +366,8 @@ export default function TasksScreen() {
         assigned_to: '',
         assigned_to_name: 'Select user...',
         due_date: new Date(),
-        priority: 'medium'
+        priority: 'medium',
+        attachments: []
       })
       setShowAddModal(false)
       Alert.alert('Success', 'Task created successfully!')
@@ -173,7 +376,109 @@ export default function TasksScreen() {
       Alert.alert('Error', 'Failed to create task')
     } finally {
       setAddingTask(false)
+      setUploadingFile(false)
     }
+  }
+
+const addAttachmentToExistingTask = async (taskId: string) => {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: '*/*',
+      copyToCacheDirectory: true,
+      multiple: false
+    })
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const file = result.assets[0]
+      
+      if (file.size && file.size > 10 * 1024 * 1024) {
+        Alert.alert('Error', 'File size must be less than 10MB')
+        return
+      }
+
+      setUploadingFile(true)
+
+      const selectedFile: SelectedFile = {
+        uri: file.uri,
+        name: file.name,
+        size: file.size || 0,
+        mimeType: file.mimeType || 'application/octet-stream'
+      }
+
+      await uploadFile(selectedFile, taskId)
+      await fetchAttachments(taskId)
+      
+      Alert.alert('Success', 'File uploaded successfully!')
+    }
+  } catch (error) {
+    console.error('Error adding attachment:', error)
+    Alert.alert('Error', 'Failed to upload file')
+  } finally {
+    setUploadingFile(false)
+  }
+}
+
+  const downloadAttachment = async (attachment: TaskAttachment) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('attachments')
+        .createSignedUrl(attachment.file_path, 3600) // 1 hour expiry
+
+      if (error) throw error
+
+      if (data?.signedUrl) {
+        await Linking.openURL(data.signedUrl)
+      }
+    } catch (error) {
+      console.error('Error downloading attachment:', error)
+      Alert.alert('Error', 'Failed to download file')
+    }
+  }
+
+  const deleteAttachment = async (attachmentId: string, filePath: string, taskId: string) => {
+    Alert.alert(
+      'Delete Attachment',
+      'Are you sure you want to delete this file?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Delete from storage
+              const { error: storageError } = await supabase.storage
+                .from('attachments')
+                .remove([filePath])
+
+              if (storageError) throw storageError
+
+              // Delete from database
+              const { error: dbError } = await supabase
+                .from('task_attachments')
+                .delete()
+                .eq('id', attachmentId)
+
+              if (dbError) throw dbError
+
+              await fetchAttachments(taskId)
+              Alert.alert('Success', 'File deleted successfully!')
+            } catch (error) {
+              console.error('Error deleting attachment:', error)
+              Alert.alert('Error', 'Failed to delete file')
+            }
+          }
+        }
+      ]
+    )
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
   }
 
   const updateTaskStatus = async (taskId: string, newStatus: Task['status']) => {
@@ -185,14 +490,12 @@ export default function TasksScreen() {
 
       if (error) throw error
 
-      // Update local state immediately for better UX
       setTasks(prev => prev.map(task => 
         task.id === taskId ? { ...task, status: newStatus } : task
       ))
     } catch (error) {
       console.error('Error updating task status:', error)
       Alert.alert('Error', 'Failed to update task status')
-      // Revert on error
       fetchTasks()
     }
   }
@@ -200,7 +503,7 @@ export default function TasksScreen() {
   const deleteTask = async (taskId: string) => {
     Alert.alert(
       'Delete Task',
-      'Are you sure you want to delete this task?',
+      'Are you sure you want to delete this task? All attachments will also be deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -208,6 +511,15 @@ export default function TasksScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Delete all attachments from storage
+              const taskAttachments = attachments[taskId] || []
+              if (taskAttachments.length > 0) {
+                const filePaths = taskAttachments.map(a => a.file_path)
+                await supabase.storage
+                  .from('attachments')
+                  .remove(filePaths)
+              }
+
               const { error } = await supabase
                 .from('tasks')
                 .delete()
@@ -215,7 +527,6 @@ export default function TasksScreen() {
 
               if (error) throw error
 
-              // Remove from local state immediately
               setTasks(prev => prev.filter(task => task.id !== taskId))
             } catch (error) {
               console.error('Error deleting task:', error)
@@ -277,7 +588,7 @@ export default function TasksScreen() {
 
   const filteredTasks = tasks.filter(task => {
     if (filter === 'all') return true
-    return task.status === filter
+        return task.status === filter
   })
 
   if (loading && tasks.length === 0) {
@@ -365,6 +676,36 @@ export default function TasksScreen() {
               <Text style={styles.taskDescription}>{item.description}</Text>
             ) : null}
 
+            {/* Attachments Section */}
+            {attachments[item.id] && attachments[item.id].length > 0 && (
+              <View style={styles.attachmentsContainer}>
+                <Text style={styles.attachmentsTitle}>
+                  📎 Attachments ({attachments[item.id].length})
+                </Text>
+                {attachments[item.id].map((attachment) => (
+                  <View key={attachment.id} style={styles.attachmentItem}>
+                    <TouchableOpacity
+                      style={styles.attachmentInfo}
+                      onPress={() => downloadAttachment(attachment)}
+                    >
+                      <Text style={styles.attachmentName} numberOfLines={1}>
+                        {attachment.file_name}
+                      </Text>
+                      <Text style={styles.attachmentSize}>
+                        {formatFileSize(attachment.file_size)}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.deleteAttachmentButton}
+                      onPress={() => deleteAttachment(attachment.id, attachment.file_path, item.id)}
+                    >
+                      <Text style={styles.deleteAttachmentText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+
             <View style={styles.taskFooter}>
               <View style={styles.taskMeta}>
                 <Text style={styles.assignedTo}>
@@ -379,14 +720,28 @@ export default function TasksScreen() {
                 </Text>
               </View>
               
-              {(user?.id === item.created_by || user?.id === item.assigned_to) && (
+              <View style={styles.taskActions}>
                 <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => deleteTask(item.id)}
+                  style={styles.attachButton}
+                  onPress={() => addAttachmentToExistingTask(item.id)}
+                  disabled={uploadingFile}
                 >
-                  <Text style={styles.deleteButtonText}>Delete</Text>
+                  {uploadingFile ? (
+                    <ActivityIndicator size="small" color="#6366F1" />
+                  ) : (
+                    <Text style={styles.attachButtonText}>📎 Add</Text>
+                  )}
                 </TouchableOpacity>
-              )}
+                
+                {(user?.id === item.created_by || user?.id === item.assigned_to) && (
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => deleteTask(item.id)}
+                  >
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
         )}
@@ -495,16 +850,53 @@ export default function TasksScreen() {
             ))}
           </View>
 
+          {/* File Attachments */}
+          <Text style={styles.label}>Attachments</Text>
+          <TouchableOpacity 
+            style={styles.attachFileButton}
+            onPress={pickDocument}
+          >
+            <Text style={styles.attachFileButtonText}>📎 Attach File</Text>
+          </TouchableOpacity>
+
+          {newTask.attachments.length > 0 && (
+            <View style={styles.selectedFilesContainer}>
+              {newTask.attachments.map((file, index) => (
+                <View key={index} style={styles.selectedFileItem}>
+                  <View style={styles.selectedFileInfo}>
+                    <Text style={styles.selectedFileName} numberOfLines={1}>
+                      {file.name}
+                    </Text>
+                    <Text style={styles.selectedFileSize}>
+                      {formatFileSize(file.size)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.removeFileButton}
+                    onPress={() => removeAttachment(index)}
+                  >
+                    <Text style={styles.removeFileText}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
           <TouchableOpacity 
             style={[
               styles.createButton,
-              (!newTask.title.trim() || addingTask) && styles.createButtonDisabled
+              (!newTask.title.trim() || addingTask || uploadingFile) && styles.createButtonDisabled
             ]} 
             onPress={addTask}
-            disabled={!newTask.title.trim() || addingTask}
+            disabled={!newTask.title.trim() || addingTask || uploadingFile}
           >
-            {addingTask ? (
-              <ActivityIndicator color="white" />
+            {addingTask || uploadingFile ? (
+              <View style={styles.loadingButtonContent}>
+                <ActivityIndicator color="white" />
+                <Text style={styles.createButtonText}>
+                  {uploadingFile ? 'Uploading files...' : 'Creating...'}
+                </Text>
+              </View>
             ) : (
               <Text style={styles.createButtonText}>Create Task</Text>
             )}
@@ -679,6 +1071,56 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 12,
   },
+  attachmentsContainer: {
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  attachmentsTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  attachmentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'white',
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  attachmentInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  attachmentName: {
+    fontSize: 13,
+    color: '#1F2937',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  attachmentSize: {
+    fontSize: 11,
+    color: '#6B7280',
+  },
+  deleteAttachmentButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteAttachmentText: {
+    color: '#EF4444',
+    fontSize: 18,
+    fontWeight: '600',
+  },
   taskFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -698,6 +1140,23 @@ const styles = StyleSheet.create({
   },
   overdueDate: {
     color: '#EF4444',
+    fontWeight: '600',
+  },
+  taskActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  attachButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 6,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  attachButtonText: {
+    color: '#6366F1',
+    fontSize: 12,
     fontWeight: '600',
   },
   deleteButton: {
@@ -820,6 +1279,62 @@ const styles = StyleSheet.create({
   priorityButtonTextActive: {
     color: 'white',
   },
+  attachFileButton: {
+    borderWidth: 2,
+    borderColor: '#6366F1',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+    backgroundColor: '#EEF2FF',
+  },
+  attachFileButtonText: {
+    color: '#6366F1',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  selectedFilesContainer: {
+    marginBottom: 16,
+  },
+  selectedFileItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  selectedFileInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  selectedFileName: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  selectedFileSize: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  removeFileButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeFileText: {
+    color: '#EF4444',
+    fontSize: 20,
+    fontWeight: '600',
+  },
   createButton: {
     backgroundColor: '#6366F1',
     padding: 16,
@@ -834,13 +1349,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  loadingButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   userItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+        borderBottomColor: '#F3F4F6',
   },
   userItemText: {
     fontSize: 16,
