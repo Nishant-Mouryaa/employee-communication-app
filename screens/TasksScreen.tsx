@@ -11,14 +11,14 @@ import {
   Modal,
   ActivityIndicator,
   Linking,
-  Platform
+  Platform,
+  ScrollView,
+  KeyboardAvoidingView
 } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import * as DocumentPicker from 'expo-document-picker'
-
-
 
 interface Task {
   id: string
@@ -60,19 +60,49 @@ interface SelectedFile {
   mimeType: string
 }
 
+interface TaskComment {
+  id: string
+  task_id: string
+  user_id: string
+  comment: string
+  created_at: string
+  user_profile?: {
+    username: string
+    full_name: string
+    avatar_url: string
+  }
+}
+
+interface TaskLabel {
+  id: string
+  name: string
+  color: string
+}
+
+interface TaskWithLabels extends Task {
+  labels?: TaskLabel[]
+}
+
 export default function TasksScreen() {
   const { user } = useAuth()
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [tasks, setTasks] = useState<TaskWithLabels[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [attachments, setAttachments] = useState<Record<string, TaskAttachment[]>>({})
+  const [comments, setComments] = useState<Record<string, TaskComment[]>>({})
+  const [allLabels, setAllLabels] = useState<TaskLabel[]>([])
   const [loading, setLoading] = useState(true)
   const [addingTask, setAddingTask] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showUserSelector, setShowUserSelector] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
-  const [selectedTaskForAttachment, setSelectedTaskForAttachment] = useState<string | null>(null)
+  const [showTaskDetails, setShowTaskDetails] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<TaskWithLabels | null>(null)
+  const [newComment, setNewComment] = useState('')
+  const [addingComment, setAddingComment] = useState(false)
+  const [showLabelSelector, setShowLabelSelector] = useState(false)
   const [filter, setFilter] = useState<'all' | 'todo' | 'in-progress' | 'done'>('all')
+  const [selectedLabels, setSelectedLabels] = useState<string[]>([])
 
   const [newTask, setNewTask] = useState({
     title: '',
@@ -81,22 +111,24 @@ export default function TasksScreen() {
     assigned_to_name: 'Select user...',
     due_date: new Date(),
     priority: 'medium' as 'low' | 'medium' | 'high',
-    attachments: [] as SelectedFile[]
+    attachments: [] as SelectedFile[],
+    labels: [] as string[]
   })
 
   useEffect(() => {
     if (user) {
       fetchTasks()
       fetchUsers()
+      fetchLabels()
       setupRealtimeSubscription()
     }
   }, [user])
 
   useEffect(() => {
-    // Fetch attachments for all tasks
     if (tasks.length > 0) {
       tasks.forEach(task => {
         fetchAttachments(task.id)
+        fetchComments(task.id)
       })
     }
   }, [tasks])
@@ -123,7 +155,23 @@ export default function TasksScreen() {
 
       if (error) throw error
 
-      setTasks(data || [])
+      // Fetch labels for each task
+      const tasksWithLabels = await Promise.all(
+        (data || []).map(async (task) => {
+          const { data: labelData } = await supabase
+            .from('task_label_assignments')
+            .select(`
+              label_id,
+              task_labels:label_id (id, name, color)
+            `)
+            .eq('task_id', task.id)
+
+          const labels = labelData?.map(l => l.task_labels).filter(Boolean) || []
+          return { ...task, labels }
+        })
+      )
+
+      setTasks(tasksWithLabels)
     } catch (error) {
       console.error('Error fetching tasks:', error)
       Alert.alert('Error', 'Failed to load tasks')
@@ -166,6 +214,87 @@ export default function TasksScreen() {
     }
   }
 
+const fetchComments = async (taskId: string) => {
+  try {
+    // Fetch comments first
+    const { data: commentsData, error: commentsError } = await supabase
+      .from('task_comments')
+      .select('*')
+      .eq('task_id', taskId)
+      .order('created_at', { ascending: true })
+
+    if (commentsError) throw commentsError
+
+    if (!commentsData || commentsData.length === 0) {
+      setComments(prev => ({
+        ...prev,
+        [taskId]: []
+      }))
+      return
+    }
+
+    // Get unique user IDs
+    const userIds = [...new Set(commentsData.map(c => c.user_id))]
+    
+    // Fetch user profiles
+    const { data: profilesData, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, username, full_name, avatar_url')
+      .in('id', userIds)
+
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError)
+      // Still set comments even if profiles fail
+      setComments(prev => ({
+        ...prev,
+        [taskId]: commentsData
+      }))
+      return
+    }
+
+    // Create a map of user profiles
+    const profilesMap = new Map(
+      profilesData?.map(profile => [profile.id, profile]) || []
+    )
+
+    // Merge comments with profiles
+    const commentsWithProfiles = commentsData.map(comment => ({
+      ...comment,
+      user_profile: profilesMap.get(comment.user_id) || {
+        username: 'Unknown',
+        full_name: 'Unknown User',
+        avatar_url: null
+      }
+    }))
+
+    setComments(prev => ({
+      ...prev,
+      [taskId]: commentsWithProfiles
+    }))
+  } catch (error) {
+    console.error('Error fetching comments:', error)
+    setComments(prev => ({
+      ...prev,
+      [taskId]: []
+    }))
+  }
+}
+
+  const fetchLabels = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('task_labels')
+        .select('*')
+        .order('name')
+
+      if (error) throw error
+
+      setAllLabels(data || [])
+    } catch (error) {
+      console.error('Error fetching labels:', error)
+    }
+  }
+
   const setupRealtimeSubscription = () => {
     if (!user) return
 
@@ -201,48 +330,162 @@ export default function TasksScreen() {
       )
       .subscribe()
 
+    const commentsSubscription = supabase
+      .channel('comments-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_comments'
+        },
+        (payload) => {
+          if (payload.new && 'task_id' in payload.new) {
+            fetchComments(payload.new.task_id as string)
+          }
+        }
+      )
+      .subscribe()
+
     return () => {
       tasksSubscription.unsubscribe()
       attachmentsSubscription.unsubscribe()
+      commentsSubscription.unsubscribe()
     }
   }
 
-const pickDocument = async () => {
-  try {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: '*/*',
-      copyToCacheDirectory: true,
-      multiple: false
+  const addComment = async () => {
+    if (!newComment.trim() || !selectedTask || !user) return
+
+    try {
+      setAddingComment(true)
+
+      const { error } = await supabase
+        .from('task_comments')
+        .insert({
+          task_id: selectedTask.id,
+          user_id: user.id,
+          comment: newComment.trim()
+        })
+
+      if (error) throw error
+
+      setNewComment('')
+      await fetchComments(selectedTask.id)
+    } catch (error) {
+      console.error('Error adding comment:', error)
+      Alert.alert('Error', 'Failed to add comment')
+    } finally {
+      setAddingComment(false)
+    }
+  }
+
+  const deleteComment = async (commentId: string, taskId: string) => {
+    Alert.alert(
+      'Delete Comment',
+      'Are you sure you want to delete this comment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('task_comments')
+                .delete()
+                .eq('id', commentId)
+
+              if (error) throw error
+
+              await fetchComments(taskId)
+            } catch (error) {
+              console.error('Error deleting comment:', error)
+              Alert.alert('Error', 'Failed to delete comment')
+            }
+          }
+        }
+      ]
+    )
+  }
+
+  const toggleLabel = (labelId: string) => {
+    setNewTask(prev => {
+      const labels = prev.labels.includes(labelId)
+        ? prev.labels.filter(id => id !== labelId)
+        : [...prev.labels, labelId]
+      return { ...prev, labels }
     })
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const file = result.assets[0]
-      
-      // Check file size (max 10MB)
-      if (file.size && file.size > 10 * 1024 * 1024) {
-        Alert.alert('Error', 'File size must be less than 10MB')
-        return
-      }
-
-      const selectedFile: SelectedFile = {
-        uri: file.uri,
-        name: file.name,
-        size: file.size || 0,
-        mimeType: file.mimeType || 'application/octet-stream'
-      }
-
-      setNewTask(prev => ({
-        ...prev,
-        attachments: [...prev.attachments, selectedFile]
-      }))
-      
-      console.log('File selected:', selectedFile.name, 'Size:', selectedFile.size)
-    }
-  } catch (error) {
-    console.error('Error picking document:', error)
-    Alert.alert('Error', 'Failed to pick document')
   }
-}
+
+  const toggleTaskLabel = async (taskId: string, labelId: string) => {
+    try {
+      const task = tasks.find(t => t.id === taskId)
+      if (!task) return
+
+      const hasLabel = task.labels?.some(l => l.id === labelId)
+
+      if (hasLabel) {
+        // Remove label
+        const { error } = await supabase
+          .from('task_label_assignments')
+          .delete()
+          .eq('task_id', taskId)
+          .eq('label_id', labelId)
+
+        if (error) throw error
+      } else {
+        // Add label
+        const { error } = await supabase
+          .from('task_label_assignments')
+          .insert({
+            task_id: taskId,
+            label_id: labelId
+          })
+
+        if (error) throw error
+      }
+
+      await fetchTasks()
+    } catch (error) {
+      console.error('Error toggling label:', error)
+      Alert.alert('Error', 'Failed to update label')
+    }
+  }
+
+  const pickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+        multiple: false
+      })
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0]
+        
+        if (file.size && file.size > 10 * 1024 * 1024) {
+          Alert.alert('Error', 'File size must be less than 10MB')
+          return
+        }
+
+        const selectedFile: SelectedFile = {
+          uri: file.uri,
+          name: file.name,
+          size: file.size || 0,
+          mimeType: file.mimeType || 'application/octet-stream'
+        }
+
+        setNewTask(prev => ({
+          ...prev,
+          attachments: [...prev.attachments, selectedFile]
+        }))
+      }
+    } catch (error) {
+      console.error('Error picking document:', error)
+      Alert.alert('Error', 'Failed to pick document')
+    }
+  }
 
   const removeAttachment = (index: number) => {
     setNewTask(prev => ({
@@ -251,80 +494,60 @@ const pickDocument = async () => {
     }))
   }
 
+  const uploadFile = async (file: SelectedFile, taskId: string) => {
+    try {
+      if (!user) {
+        throw new Error('No user found')
+      }
 
+      const response = await fetch(file.uri)
+      if (!response.ok) {
+        throw new Error('Failed to read selected file')
+      }
 
-const uploadFile = async (file: SelectedFile, taskId: string) => {
-  try {
-    if (!user) {
-      throw new Error('No user found')
+      const arrayBuffer = response.arrayBuffer
+        ? await response.arrayBuffer()
+        : null
+
+      if (!arrayBuffer) {
+        throw new Error('Unable to process selected file')
+      }
+
+      const fileExt = file.name.split('.').pop() || 'file'
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
+      const filePath = `task-attachments/${taskId}/${fileName}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('attachments')
+        .upload(filePath, arrayBuffer, {
+          contentType: file.mimeType || 'application/octet-stream',
+          upsert: false
+        })
+
+      if (uploadError) throw uploadError
+
+      const { error: dbError } = await supabase
+        .from('task_attachments')
+        .insert({
+          task_id: taskId,
+          file_name: file.name,
+          file_path: filePath,
+          file_size: file.size,
+          file_type: file.mimeType || 'application/octet-stream',
+          uploaded_by: user?.id
+        })
+
+      if (dbError) {
+        await supabase.storage.from('attachments').remove([filePath])
+        throw dbError
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error uploading file:', error)
+      throw error
     }
-
-    console.log('Starting file upload:', file.name)
-
-    // Use fetch to get the file as arrayBuffer (same as ProfileScreen)
-    const response = await fetch(file.uri)
-    if (!response.ok) {
-      throw new Error('Failed to read selected file')
-    }
-
-    const arrayBuffer = response.arrayBuffer
-      ? await response.arrayBuffer()
-      : null
-
-    if (!arrayBuffer) {
-      throw new Error('Unable to process selected file')
-    }
-
-    console.log('File converted to arrayBuffer, size:', arrayBuffer.byteLength)
-
-    // Generate unique file path
-    const fileExt = file.name.split('.').pop() || 'file'
-    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
-    const filePath = `task-attachments/${taskId}/${fileName}`
-
-    console.log('Uploading to path:', filePath)
-
-    // Upload to Supabase Storage (same approach as ProfileScreen)
-    const { error: uploadError } = await supabase.storage
-      .from('attachments')
-      .upload(filePath, arrayBuffer, {
-        contentType: file.mimeType || 'application/octet-stream',
-        upsert: false
-      })
-
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError)
-      throw uploadError
-    }
-
-    console.log('File uploaded successfully')
-
-    // Save attachment record to database
-    const { error: dbError } = await supabase
-      .from('task_attachments')
-      .insert({
-        task_id: taskId,
-        file_name: file.name,
-        file_path: filePath,
-        file_size: file.size,
-        file_type: file.mimeType || 'application/octet-stream',
-        uploaded_by: user?.id
-      })
-
-    if (dbError) {
-      console.error('Database error:', dbError)
-      // Clean up uploaded file if database insert fails
-      await supabase.storage.from('attachment').remove([filePath])
-      throw dbError
-    }
-
-    console.log('Database record saved successfully')
-    return true
-  } catch (error) {
-    console.error('Error uploading file:', error)
-    throw error
   }
-}
 
   const addTask = async () => {
     if (!newTask.title.trim() || !user) return
@@ -350,7 +573,21 @@ const uploadFile = async (file: SelectedFile, taskId: string) => {
 
       if (taskError) throw taskError
 
-      // Upload attachments if any
+      // Add labels
+      if (newTask.labels.length > 0) {
+        const labelAssignments = newTask.labels.map(labelId => ({
+          task_id: taskResponse.id,
+          label_id: labelId
+        }))
+
+        const { error: labelError } = await supabase
+          .from('task_label_assignments')
+          .insert(labelAssignments)
+
+        if (labelError) console.error('Error adding labels:', labelError)
+      }
+
+      // Upload attachments
       if (newTask.attachments.length > 0) {
         setUploadingFile(true)
         for (const file of newTask.attachments) {
@@ -359,7 +596,6 @@ const uploadFile = async (file: SelectedFile, taskId: string) => {
         setUploadingFile(false)
       }
 
-      // Reset form and close modal
       setNewTask({
         title: '',
         description: '',
@@ -367,7 +603,8 @@ const uploadFile = async (file: SelectedFile, taskId: string) => {
         assigned_to_name: 'Select user...',
         due_date: new Date(),
         priority: 'medium',
-        attachments: []
+        attachments: [],
+        labels: []
       })
       setShowAddModal(false)
       Alert.alert('Success', 'Task created successfully!')
@@ -380,49 +617,49 @@ const uploadFile = async (file: SelectedFile, taskId: string) => {
     }
   }
 
-const addAttachmentToExistingTask = async (taskId: string) => {
-  try {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: '*/*',
-      copyToCacheDirectory: true,
-      multiple: false
-    })
+  const addAttachmentToExistingTask = async (taskId: string) => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+        multiple: false
+      })
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const file = result.assets[0]
-      
-      if (file.size && file.size > 10 * 1024 * 1024) {
-        Alert.alert('Error', 'File size must be less than 10MB')
-        return
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0]
+        
+        if (file.size && file.size > 10 * 1024 * 1024) {
+          Alert.alert('Error', 'File size must be less than 10MB')
+          return
+        }
+
+        setUploadingFile(true)
+
+        const selectedFile: SelectedFile = {
+          uri: file.uri,
+          name: file.name,
+          size: file.size || 0,
+          mimeType: file.mimeType || 'application/octet-stream'
+        }
+
+        await uploadFile(selectedFile, taskId)
+        await fetchAttachments(taskId)
+        
+        Alert.alert('Success', 'File uploaded successfully!')
       }
-
-      setUploadingFile(true)
-
-      const selectedFile: SelectedFile = {
-        uri: file.uri,
-        name: file.name,
-        size: file.size || 0,
-        mimeType: file.mimeType || 'application/octet-stream'
-      }
-
-      await uploadFile(selectedFile, taskId)
-      await fetchAttachments(taskId)
-      
-      Alert.alert('Success', 'File uploaded successfully!')
+    } catch (error) {
+      console.error('Error adding attachment:', error)
+      Alert.alert('Error', 'Failed to upload file')
+    } finally {
+      setUploadingFile(false)
     }
-  } catch (error) {
-    console.error('Error adding attachment:', error)
-    Alert.alert('Error', 'Failed to upload file')
-  } finally {
-    setUploadingFile(false)
   }
-}
 
   const downloadAttachment = async (attachment: TaskAttachment) => {
     try {
       const { data, error } = await supabase.storage
         .from('attachments')
-        .createSignedUrl(attachment.file_path, 3600) // 1 hour expiry
+        .createSignedUrl(attachment.file_path, 3600)
 
       if (error) throw error
 
@@ -446,14 +683,12 @@ const addAttachmentToExistingTask = async (taskId: string) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Delete from storage
               const { error: storageError } = await supabase.storage
                 .from('attachments')
                 .remove([filePath])
 
               if (storageError) throw storageError
 
-              // Delete from database
               const { error: dbError } = await supabase
                 .from('task_attachments')
                 .delete()
@@ -503,7 +738,7 @@ const addAttachmentToExistingTask = async (taskId: string) => {
   const deleteTask = async (taskId: string) => {
     Alert.alert(
       'Delete Task',
-      'Are you sure you want to delete this task? All attachments will also be deleted.',
+      'Are you sure you want to delete this task? All attachments and comments will also be deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -511,7 +746,6 @@ const addAttachmentToExistingTask = async (taskId: string) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Delete all attachments from storage
               const taskAttachments = attachments[taskId] || []
               if (taskAttachments.length > 0) {
                 const filePaths = taskAttachments.map(a => a.file_path)
@@ -528,6 +762,10 @@ const addAttachmentToExistingTask = async (taskId: string) => {
               if (error) throw error
 
               setTasks(prev => prev.filter(task => task.id !== taskId))
+              if (selectedTask?.id === taskId) {
+                setShowTaskDetails(false)
+                setSelectedTask(null)
+              }
             } catch (error) {
               console.error('Error deleting task:', error)
               Alert.alert('Error', 'Failed to delete task')
@@ -545,6 +783,11 @@ const addAttachmentToExistingTask = async (taskId: string) => {
       assigned_to_name: selectedUser.full_name || selectedUser.username
     }))
     setShowUserSelector(false)
+  }
+
+  const openTaskDetails = (task: TaskWithLabels) => {
+    setSelectedTask(task)
+    setShowTaskDetails(true)
   }
 
   const getStatusColor = (status: string) => {
@@ -574,7 +817,18 @@ const addAttachmentToExistingTask = async (taskId: string) => {
     })
   }
 
-  const formatModalDate = (date: Date) => {
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
+
+    const formatModalDate = (date: Date) => {
     return date.toLocaleDateString('en-US', { 
       month: 'long', 
       day: 'numeric',
@@ -588,7 +842,7 @@ const addAttachmentToExistingTask = async (taskId: string) => {
 
   const filteredTasks = tasks.filter(task => {
     if (filter === 'all') return true
-        return task.status === filter
+    return task.status === filter
   })
 
   if (loading && tasks.length === 0) {
@@ -644,22 +898,48 @@ const addAttachmentToExistingTask = async (taskId: string) => {
         refreshing={loading}
         onRefresh={fetchTasks}
         renderItem={({ item }) => (
-          <View style={styles.taskCard}>
+          <TouchableOpacity 
+            style={styles.taskCard}
+            onPress={() => openTaskDetails(item)}
+            activeOpacity={0.7}
+          >
             <View style={styles.taskHeader}>
               <View style={styles.taskTitleContainer}>
                 <Text style={styles.taskTitle}>{item.title}</Text>
-                <View style={[
-                  styles.priorityBadge,
-                  { backgroundColor: getPriorityColor(item.priority) }
-                ]}>
-                  <Text style={styles.priorityText}>
-                    {item.priority.toUpperCase()}
-                  </Text>
+                <View style={styles.badgesRow}>
+                  <View style={[
+                    styles.priorityBadge,
+                    { backgroundColor: getPriorityColor(item.priority) }
+                  ]}>
+                    <Text style={styles.priorityText}>
+                      {item.priority.toUpperCase()}
+                    </Text>
+                  </View>
+                  {item.labels && item.labels.length > 0 && (
+                    <View style={styles.labelsPreview}>
+                      {item.labels.slice(0, 2).map((label) => (
+                        <View
+                          key={label.id}
+                          style={[styles.labelChip, { backgroundColor: label.color + '20', borderColor: label.color }]}
+                        >
+                          <Text style={[styles.labelChipText, { color: label.color }]}>
+                            {label.name}
+                          </Text>
+                        </View>
+                      ))}
+                      {item.labels.length > 2 && (
+                        <Text style={styles.moreLabelIndicator}>
+                          +{item.labels.length - 2}
+                        </Text>
+                      )}
+                    </View>
+                  )}
                 </View>
               </View>
               <TouchableOpacity
                 style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}
-                onPress={() => {
+                onPress={(e) => {
+                  e.stopPropagation()
                   const statuses: Task['status'][] = ['todo', 'in-progress', 'done']
                   const currentIndex = statuses.indexOf(item.status)
                   const nextStatus = statuses[(currentIndex + 1) % statuses.length]
@@ -673,77 +953,43 @@ const addAttachmentToExistingTask = async (taskId: string) => {
             </View>
 
             {item.description ? (
-              <Text style={styles.taskDescription}>{item.description}</Text>
+              <Text style={styles.taskDescription} numberOfLines={2}>
+                {item.description}
+              </Text>
             ) : null}
-
-            {/* Attachments Section */}
-            {attachments[item.id] && attachments[item.id].length > 0 && (
-              <View style={styles.attachmentsContainer}>
-                <Text style={styles.attachmentsTitle}>
-                  📎 Attachments ({attachments[item.id].length})
-                </Text>
-                {attachments[item.id].map((attachment) => (
-                  <View key={attachment.id} style={styles.attachmentItem}>
-                    <TouchableOpacity
-                      style={styles.attachmentInfo}
-                      onPress={() => downloadAttachment(attachment)}
-                    >
-                      <Text style={styles.attachmentName} numberOfLines={1}>
-                        {attachment.file_name}
-                      </Text>
-                      <Text style={styles.attachmentSize}>
-                        {formatFileSize(attachment.file_size)}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.deleteAttachmentButton}
-                      onPress={() => deleteAttachment(attachment.id, attachment.file_path, item.id)}
-                    >
-                      <Text style={styles.deleteAttachmentText}>×</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            )}
 
             <View style={styles.taskFooter}>
               <View style={styles.taskMeta}>
                 <Text style={styles.assignedTo}>
-                  Assigned to: {item.assigned_to_profile?.full_name || item.assigned_to_profile?.username || 'Unassigned'}
+                  👤 {item.assigned_to_profile?.full_name || item.assigned_to_profile?.username || 'Unassigned'}
                 </Text>
                 <Text style={[
                   styles.dueDate,
                   isOverdue(item.due_date) && styles.overdueDate
                 ]}>
-                  Due: {formatDate(item.due_date)}
+                  📅 {formatDate(item.due_date)}
                   {isOverdue(item.due_date) && ' ⚠️'}
                 </Text>
               </View>
               
-              <View style={styles.taskActions}>
-                <TouchableOpacity
-                  style={styles.attachButton}
-                  onPress={() => addAttachmentToExistingTask(item.id)}
-                  disabled={uploadingFile}
-                >
-                  {uploadingFile ? (
-                    <ActivityIndicator size="small" color="#6366F1" />
-                  ) : (
-                    <Text style={styles.attachButtonText}>📎 Add</Text>
-                  )}
-                </TouchableOpacity>
-                
-                {(user?.id === item.created_by || user?.id === item.assigned_to) && (
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => deleteTask(item.id)}
-                  >
-                    <Text style={styles.deleteButtonText}>Delete</Text>
-                  </TouchableOpacity>
+              <View style={styles.taskIcons}>
+                {attachments[item.id] && attachments[item.id].length > 0 && (
+                  <View style={styles.iconBadge}>
+                    <Text style={styles.iconBadgeText}>
+                      📎 {attachments[item.id].length}
+                    </Text>
+                  </View>
+                )}
+                {comments[item.id] && comments[item.id].length > 0 && (
+                  <View style={styles.iconBadge}>
+                    <Text style={styles.iconBadgeText}>
+                      💬 {comments[item.id].length}
+                    </Text>
+                  </View>
                 )}
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
         )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -758,6 +1004,283 @@ const addAttachmentToExistingTask = async (taskId: string) => {
         }
       />
 
+      {/* Task Details Modal */}
+      <Modal
+        visible={showTaskDetails}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowTaskDetails(false)
+          setSelectedTask(null)
+        }}
+      >
+        {selectedTask && (
+          <KeyboardAvoidingView 
+            style={styles.modalContainer}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Task Details</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowTaskDetails(false)
+                  setSelectedTask(null)
+                }}
+              >
+                <Text style={styles.closeButton}>Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.detailsScrollView}>
+              {/* Task Info */}
+              <View style={styles.detailsSection}>
+                <Text style={styles.detailsTitle}>{selectedTask.title}</Text>
+                
+                <View style={styles.detailsBadges}>
+                  <View style={[styles.statusBadgeLarge, { backgroundColor: getStatusColor(selectedTask.status) }]}>
+                    <Text style={styles.statusTextLarge}>
+                      {selectedTask.status.replace('-', ' ').toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={[styles.priorityBadgeLarge, { backgroundColor: getPriorityColor(selectedTask.priority) }]}>
+                    <Text style={styles.priorityTextLarge}>
+                      {selectedTask.priority.toUpperCase()} PRIORITY
+                    </Text>
+                  </View>
+                </View>
+
+                {selectedTask.description ? (
+                  <Text style={styles.detailsDescription}>{selectedTask.description}</Text>
+                ) : null}
+
+                <View style={styles.detailsMetaContainer}>
+                  <View style={styles.detailsMetaItem}>
+                    <Text style={styles.detailsMetaLabel}>Assigned to:</Text>
+                    <Text style={styles.detailsMetaValue}>
+                      {selectedTask.assigned_to_profile?.full_name || 'Unassigned'}
+                    </Text>
+                  </View>
+                  <View style={styles.detailsMetaItem}>
+                    <Text style={styles.detailsMetaLabel}>Due Date:</Text>
+                    <Text style={[
+                      styles.detailsMetaValue,
+                      isOverdue(selectedTask.due_date) && styles.overdueText
+                    ]}>
+                      {formatDate(selectedTask.due_date)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Labels Section */}
+              <View style={styles.detailsSection}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>🏷️ Labels</Text>
+                  <TouchableOpacity
+                    style={styles.manageLabelButton}
+                    onPress={() => setShowLabelSelector(true)}
+                  >
+                    <Text style={styles.manageLabelButtonText}>Manage</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                {selectedTask.labels && selectedTask.labels.length > 0 ? (
+                  <View style={styles.labelsContainer}>
+                    {selectedTask.labels.map((label) => (
+                      <View
+                        key={label.id}
+                        style={[styles.labelChipLarge, { backgroundColor: label.color + '20', borderColor: label.color }]}
+                      >
+                        <Text style={[styles.labelChipTextLarge, { color: label.color }]}>
+                          {label.name}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.emptyMessage}>No labels assigned</Text>
+                )}
+              </View>
+
+              {/* Attachments Section */}
+              <View style={styles.detailsSection}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>
+                    📎 Attachments ({attachments[selectedTask.id]?.length || 0})
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={() => addAttachmentToExistingTask(selectedTask.id)}
+                    disabled={uploadingFile}
+                  >
+                    {uploadingFile ? (
+                      <ActivityIndicator size="small" color="#6366F1" />
+                    ) : (
+                      <Text style={styles.addButtonText}>+ Add</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {attachments[selectedTask.id] && attachments[selectedTask.id].length > 0 ? (
+                  <View style={styles.attachmentsListContainer}>
+                    {attachments[selectedTask.id].map((attachment) => (
+                      <View key={attachment.id} style={styles.attachmentItemLarge}>
+                        <TouchableOpacity
+                          style={styles.attachmentInfoLarge}
+                          onPress={() => downloadAttachment(attachment)}
+                        >
+                          <Text style={styles.attachmentNameLarge} numberOfLines={1}>
+                            📄 {attachment.file_name}
+                          </Text>
+                          <Text style={styles.attachmentSizeLarge}>
+                            {formatFileSize(attachment.file_size)}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.deleteAttachmentButtonLarge}
+                          onPress={() => deleteAttachment(attachment.id, attachment.file_path, selectedTask.id)}
+                        >
+                          <Text style={styles.deleteAttachmentTextLarge}>×</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.emptyMessage}>No attachments</Text>
+                )}
+              </View>
+
+              {/* Comments Section */}
+              <View style={styles.detailsSection}>
+                <Text style={styles.sectionTitle}>
+                  💬 Comments ({comments[selectedTask.id]?.length || 0})
+                </Text>
+
+                {comments[selectedTask.id] && comments[selectedTask.id].length > 0 ? (
+                  <View style={styles.commentsListContainer}>
+                    {comments[selectedTask.id].map((comment) => (
+                      <View key={comment.id} style={styles.commentItem}>
+                        <View style={styles.commentHeader}>
+                          <View style={styles.commentAuthorInfo}>
+                            <Text style={styles.commentAuthor}>
+                              {comment.user_profile?.full_name || comment.user_profile?.username || 'Unknown'}
+                            </Text>
+                            <Text style={styles.commentTime}>
+                              {formatDateTime(comment.created_at)}
+                            </Text>
+                          </View>
+                          {comment.user_id === user?.id && (
+                            <TouchableOpacity
+                              onPress={() => deleteComment(comment.id, selectedTask.id)}
+                            >
+                              <Text style={styles.deleteCommentButton}>Delete</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        <Text style={styles.commentText}>{comment.comment}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.emptyMessage}>No comments yet</Text>
+                )}
+
+                {/* Add Comment Input */}
+                <View style={styles.addCommentContainer}>
+                  <TextInput
+                    style={styles.commentInput}
+                    placeholder="Add a comment..."
+                    value={newComment}
+                    onChangeText={setNewComment}
+                    multiline
+                    maxLength={500}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.sendCommentButton,
+                      (!newComment.trim() || addingComment) && styles.sendCommentButtonDisabled
+                    ]}
+                    onPress={addComment}
+                    disabled={!newComment.trim() || addingComment}
+                  >
+                    {addingComment ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Text style={styles.sendCommentButtonText}>Send</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Delete Task Button */}
+              {(user?.id === selectedTask.created_by || user?.id === selectedTask.assigned_to) && (
+                <TouchableOpacity
+                  style={styles.deleteTaskButton}
+                  onPress={() => deleteTask(selectedTask.id)}
+                >
+                  <Text style={styles.deleteTaskButtonText}>Delete Task</Text>
+                </TouchableOpacity>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </KeyboardAvoidingView>
+        )}
+      </Modal>
+
+      {/* Label Selector Modal */}
+      <Modal
+        visible={showLabelSelector}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowLabelSelector(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Manage Labels</Text>
+            <TouchableOpacity onPress={() => setShowLabelSelector(false)}>
+              <Text style={styles.closeButton}>Done</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.labelSelectorContent}>
+            {allLabels.map((label) => {
+              const isSelected = selectedTask?.labels?.some(l => l.id === label.id)
+              return (
+                <TouchableOpacity
+                  key={label.id}
+                  style={[
+                    styles.labelSelectorItem,
+                    isSelected && styles.labelSelectorItemSelected
+                  ]}
+                  onPress={() => {
+                    if (selectedTask) {
+                      toggleTaskLabel(selectedTask.id, label.id)
+                      // Update local state immediately
+                      setSelectedTask(prev => {
+                        if (!prev) return prev
+                        const labels = isSelected
+                          ? prev.labels?.filter(l => l.id !== label.id)
+                          : [...(prev.labels || []), label]
+                        return { ...prev, labels }
+                      })
+                    }
+                  }}
+                >
+                  <View
+                    style={[styles.labelSelectorColor, { backgroundColor: label.color }]}
+                  />
+                  <Text style={styles.labelSelectorName}>{label.name}</Text>
+                  {isSelected && (
+                    <Text style={styles.labelSelectorCheck}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* Add Task Modal */}
       <Modal
         visible={showAddModal}
@@ -765,7 +1288,10 @@ const addAttachmentToExistingTask = async (taskId: string) => {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <View style={styles.modalContainer}>
+        <KeyboardAvoidingView 
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add New Task</Text>
             <TouchableOpacity onPress={() => setShowAddModal(false)}>
@@ -773,135 +1299,163 @@ const addAttachmentToExistingTask = async (taskId: string) => {
             </TouchableOpacity>
           </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Task title *"
-            value={newTask.title}
-            onChangeText={(text) => setNewTask(prev => ({ ...prev, title: text }))}
-          />
-
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Description (optional)"
-            value={newTask.description}
-            onChangeText={(text) => setNewTask(prev => ({ ...prev, description: text }))}
-            multiline
-            numberOfLines={3}
-          />
-
-          {/* User Selector */}
-          <Text style={styles.label}>Assign to</Text>
-          <TouchableOpacity 
-            style={styles.selectorButton}
-            onPress={() => setShowUserSelector(true)}
-          >
-            <Text style={[
-              styles.selectorButtonText,
-              newTask.assigned_to && styles.selectorButtonTextSelected
-            ]}>
-              {newTask.assigned_to_name}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Date Selector */}
-          <Text style={styles.label}>Due Date</Text>
-          <TouchableOpacity 
-            style={styles.selectorButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Text style={styles.selectorButtonText}>
-              {formatModalDate(newTask.due_date)}
-            </Text>
-          </TouchableOpacity>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={newTask.due_date}
-              mode="date"
-              display="default"
-              onChange={(event, date) => {
-                setShowDatePicker(false)
-                if (date) {
-                  setNewTask(prev => ({ ...prev, due_date: date }))
-                }
-              }}
+          <ScrollView>
+            <TextInput
+              style={styles.input}
+              placeholder="Task title *"
+              value={newTask.title}
+              onChangeText={(text) => setNewTask(prev => ({ ...prev, title: text }))}
             />
-          )}
 
-          {/* Priority Selector */}
-          <Text style={styles.label}>Priority</Text>
-          <View style={styles.priorityButtons}>
-            {(['low', 'medium', 'high'] as const).map(priority => (
-              <TouchableOpacity
-                key={priority}
-                style={[
-                  styles.priorityButton,
-                  newTask.priority === priority && styles.priorityButtonActive
-                ]}
-                onPress={() => setNewTask(prev => ({ ...prev, priority }))}
-              >
-                <Text style={[
-                  styles.priorityButtonText,
-                  newTask.priority === priority && styles.priorityButtonTextActive
-                ]}>
-                  {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Description (optional)"
+              value={newTask.description}
+              onChangeText={(text) => setNewTask(prev => ({ ...prev, description: text }))}
+              multiline
+              numberOfLines={3}
+            />
 
-          {/* File Attachments */}
-          <Text style={styles.label}>Attachments</Text>
-          <TouchableOpacity 
-            style={styles.attachFileButton}
-            onPress={pickDocument}
-          >
-            <Text style={styles.attachFileButtonText}>📎 Attach File</Text>
-          </TouchableOpacity>
+            {/* User Selector */}
+            <Text style={styles.label}>Assign to</Text>
+            <TouchableOpacity 
+              style={styles.selectorButton}
+              onPress={() => setShowUserSelector(true)}
+            >
+              <Text style={[
+                styles.selectorButtonText,
+                newTask.assigned_to && styles.selectorButtonTextSelected
+              ]}>
+                {newTask.assigned_to_name}
+              </Text>
+            </TouchableOpacity>
 
-          {newTask.attachments.length > 0 && (
-            <View style={styles.selectedFilesContainer}>
-              {newTask.attachments.map((file, index) => (
-                <View key={index} style={styles.selectedFileItem}>
-                  <View style={styles.selectedFileInfo}>
-                    <Text style={styles.selectedFileName} numberOfLines={1}>
-                      {file.name}
-                    </Text>
-                    <Text style={styles.selectedFileSize}>
-                      {formatFileSize(file.size)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.removeFileButton}
-                    onPress={() => removeAttachment(index)}
-                  >
-                    <Text style={styles.removeFileText}>×</Text>
-                  </TouchableOpacity>
-                </View>
+            {/* Date Selector */}
+            <Text style={styles.label}>Due Date</Text>
+            <TouchableOpacity 
+              style={styles.selectorButton}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={styles.selectorButtonText}>
+                {formatModalDate(newTask.due_date)}
+              </Text>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={newTask.due_date}
+                mode="date"
+                display="default"
+                minimumDate={new Date()}
+                onChange={(event, date) => {
+                  setShowDatePicker(false)
+                  if (date) {
+                    setNewTask(prev => ({ ...prev, due_date: date }))
+                  }
+                }}
+              />
+            )}
+
+            {/* Priority Selector */}
+            <Text style={styles.label}>Priority</Text>
+            <View style={styles.priorityButtons}>
+              {(['low', 'medium', 'high'] as const).map(priority => (
+                <TouchableOpacity
+                  key={priority}
+                  style={[
+                    styles.priorityButton,
+                    newTask.priority === priority && styles.priorityButtonActive
+                  ]}
+                  onPress={() => setNewTask(prev => ({ ...prev, priority }))}
+                >
+                  <Text style={[
+                    styles.priorityButtonText,
+                    newTask.priority === priority && styles.priorityButtonTextActive
+                  ]}>
+                    {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                  </Text>
+                </TouchableOpacity>
               ))}
             </View>
-          )}
 
-          <TouchableOpacity 
-            style={[
-              styles.createButton,
-              (!newTask.title.trim() || addingTask || uploadingFile) && styles.createButtonDisabled
-            ]} 
-            onPress={addTask}
-            disabled={!newTask.title.trim() || addingTask || uploadingFile}
-          >
-            {addingTask || uploadingFile ? (
-              <View style={styles.loadingButtonContent}>
-                <ActivityIndicator color="white" />
-                <Text style={styles.createButtonText}>
-                  {uploadingFile ? 'Uploading files...' : 'Creating...'}
-                </Text>
+            {/* Labels Selector */}
+            <Text style={styles.label}>Labels</Text>
+            <View style={styles.labelsSelectContainer}>
+              {allLabels.map((label) => {
+                const isSelected = newTask.labels.includes(label.id)
+                return (
+                  <TouchableOpacity
+                    key={label.id}
+                    style={[
+                      styles.labelSelectChip,
+                      isSelected && { backgroundColor: label.color + '30', borderColor: label.color }
+                    ]}
+                    onPress={() => toggleLabel(label.id)}
+                  >
+                    <Text style={[
+                      styles.labelSelectChipText,
+                      isSelected && { color: label.color, fontWeight: '600' }
+                    ]}>
+                      {label.name}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+
+            {/* File Attachments */}
+            <Text style={styles.label}>Attachments</Text>
+            <TouchableOpacity 
+              style={styles.attachFileButton}
+              onPress={pickDocument}
+            >
+              <Text style={styles.attachFileButtonText}>📎 Attach File</Text>
+            </TouchableOpacity>
+
+            {newTask.attachments.length > 0 && (
+              <View style={styles.selectedFilesContainer}>
+                {newTask.attachments.map((file, index) => (
+                  <View key={index} style={styles.selectedFileItem}>
+                    <View style={styles.selectedFileInfo}>
+                      <Text style={styles.selectedFileName} numberOfLines={1}>
+                        {file.name}
+                      </Text>
+                      <Text style={styles.selectedFileSize}>
+                        {formatFileSize(file.size)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.removeFileButton}
+                      onPress={() => removeAttachment(index)}
+                    >
+                      <Text style={styles.removeFileText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
               </View>
-            ) : (
-              <Text style={styles.createButtonText}>Create Task</Text>
             )}
-          </TouchableOpacity>
-        </View>
+
+            <TouchableOpacity 
+              style={[
+                styles.createButton,
+                (!newTask.title.trim() || addingTask || uploadingFile) && styles.createButtonDisabled
+              ]} 
+              onPress={addTask}
+              disabled={!newTask.title.trim() || addingTask || uploadingFile}
+            >
+              {addingTask || uploadingFile ? (
+                <View style={styles.loadingButtonContent}>
+                  <ActivityIndicator color="white" />
+                  <Text style={styles.createButtonText}>
+                    {uploadingFile ? 'Uploading files...' : 'Creating...'}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.createButtonText}>Create Task</Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+               </KeyboardAvoidingView>
       </Modal>
 
       {/* User Selector Modal */}
@@ -1042,10 +1596,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   priorityBadge: {
-    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
@@ -1054,6 +1613,26 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 10,
     fontWeight: '700',
+  },
+  labelsPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  labelChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  labelChipText: {
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  moreLabelIndicator: {
+    fontSize: 10,
+    color: '#6B7280',
+    fontWeight: '600',
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -1070,56 +1649,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     lineHeight: 20,
     marginBottom: 12,
-  },
-  attachmentsContainer: {
-    backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  attachmentsTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  attachmentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'white',
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  attachmentInfo: {
-    flex: 1,
-    marginRight: 8,
-  },
-  attachmentName: {
-    fontSize: 13,
-    color: '#1F2937',
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  attachmentSize: {
-    fontSize: 11,
-    color: '#6B7280',
-  },
-  deleteAttachmentButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteAttachmentText: {
-    color: '#EF4444',
-    fontSize: 18,
-    fontWeight: '600',
   },
   taskFooter: {
     flexDirection: 'row',
@@ -1142,32 +1671,19 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontWeight: '600',
   },
-  taskActions: {
+  taskIcons: {
     flexDirection: 'row',
     gap: 8,
   },
-  attachButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 6,
-    minWidth: 60,
-    alignItems: 'center',
+  iconBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  attachButtonText: {
-    color: '#6366F1',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  deleteButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#EF4444',
-    borderRadius: 6,
-  },
-  deleteButtonText: {
-    color: 'white',
-    fontSize: 12,
+  iconBadgeText: {
+    fontSize: 11,
+    color: '#6B7280',
     fontWeight: '600',
   },
   loadingContainer: {
@@ -1199,14 +1715,16 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: 'white',
-    padding: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 20,
     paddingTop: 60,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   modalTitle: {
     fontSize: 20,
@@ -1218,12 +1736,297 @@ const styles = StyleSheet.create({
     color: '#6366F1',
     fontWeight: '600',
   },
+  detailsScrollView: {
+    flex: 1,
+  },
+  detailsSection: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  detailsTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  detailsBadges: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  statusBadgeLarge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  statusTextLarge: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  priorityBadgeLarge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  priorityTextLarge: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  detailsDescription: {
+    fontSize: 15,
+    color: '#6B7280',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  detailsMetaContainer: {
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+  },
+  detailsMetaItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  detailsMetaLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  detailsMetaValue: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  overdueText: {
+    color: '#EF4444',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  manageLabelButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 6,
+  },
+  manageLabelButtonText: {
+    color: '#6366F1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  addButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 6,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  addButtonText: {
+    color: '#6366F1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  labelsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  labelChipLarge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1.5,
+  },
+  labelChipTextLarge: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  emptyMessage: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  attachmentsListContainer: {
+    gap: 8,
+  },
+  attachmentItemLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  attachmentInfoLarge: {
+    flex: 1,
+    marginRight: 8,
+  },
+  attachmentNameLarge: {
+    fontSize: 14,
+    color: '#1F2937',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  attachmentSizeLarge: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  deleteAttachmentButtonLarge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteAttachmentTextLarge: {
+    color: '#EF4444',
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  commentsListContainer: {
+    marginTop: 8,
+    gap: 12,
+  },
+  commentItem: {
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#6366F1',
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  commentAuthorInfo: {
+    flex: 1,
+  },
+  commentAuthor: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  commentTime: {
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  deleteCommentButton: {
+    fontSize: 12,
+    color: '#EF4444',
+    fontWeight: '600',
+  },
+  commentText: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 20,
+  },
+  addCommentContainer: {
+    flexDirection: 'row',
+    marginTop: 16,
+    gap: 8,
+  },
+  commentInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    backgroundColor: '#F9FAFB',
+    maxHeight: 100,
+  },
+  sendCommentButton: {
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 70,
+  },
+  sendCommentButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
+  sendCommentButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  deleteTaskButton: {
+    backgroundColor: '#EF4444',
+    margin: 20,
+    marginTop: 0,
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  deleteTaskButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  labelSelectorContent: {
+    flex: 1,
+    padding: 20,
+  },
+  labelSelectorItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  labelSelectorItemSelected: {
+    borderColor: '#6366F1',
+    backgroundColor: '#EEF2FF',
+  },
+  labelSelectorColor: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 12,
+  },
+  labelSelectorName: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1F2937',
+    fontWeight: '500',
+  },
+  labelSelectorCheck: {
+    fontSize: 18,
+    color: '#6366F1',
+    fontWeight: 'bold',
+  },
   input: {
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
+    marginHorizontal: 20,
     fontSize: 16,
     backgroundColor: '#F9FAFB',
   },
@@ -1236,6 +2039,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
+    marginHorizontal: 20,
   },
   selectorButton: {
     borderWidth: 1,
@@ -1243,6 +2047,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
+    marginHorizontal: 20,
     backgroundColor: '#F9FAFB',
   },
   selectorButtonText: {
@@ -1257,6 +2062,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginBottom: 24,
+    marginHorizontal: 20,
   },
   priorityButton: {
     flex: 1,
@@ -1279,6 +2085,25 @@ const styles = StyleSheet.create({
   priorityButtonTextActive: {
     color: 'white',
   },
+  labelsSelectContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 24,
+    marginHorizontal: 20,
+  },
+  labelSelectChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  labelSelectChipText: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
   attachFileButton: {
     borderWidth: 2,
     borderColor: '#6366F1',
@@ -1287,6 +2112,7 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     marginBottom: 16,
+    marginHorizontal: 20,
     backgroundColor: '#EEF2FF',
   },
   attachFileButtonText: {
@@ -1296,6 +2122,7 @@ const styles = StyleSheet.create({
   },
   selectedFilesContainer: {
     marginBottom: 16,
+    marginHorizontal: 20,
   },
   selectedFileItem: {
     flexDirection: 'row',
@@ -1340,6 +2167,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 20,
   },
   createButtonDisabled: {
     backgroundColor: '#9CA3AF',
@@ -1360,7 +2189,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-        borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#F3F4F6',
   },
   userItemText: {
     fontSize: 16,
