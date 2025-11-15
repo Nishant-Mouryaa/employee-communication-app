@@ -17,7 +17,6 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { Category, Attachment, Announcement, UserRole } from '../types/announcement'
-
 // Role-based permissions
 const ROLES: { [key: string]: UserRole } = {
   employee: { canPost: false, canEditAll: false, canPin: false, canDeleteAll: false, isAdmin: false },
