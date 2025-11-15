@@ -1,60 +1,123 @@
 // screens/AnnouncementsScreen.tsx
 import React, { useState, useEffect } from 'react'
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, Alert, ScrollView, ActivityIndicator } from 'react-native'
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  FlatList, 
+  TouchableOpacity, 
+  TextInput, 
+  Modal, 
+  Alert, 
+  ScrollView, 
+  ActivityIndicator,
+  Linking,
+  Platform 
+} from 'react-native'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { Category, Attachment, Announcement, UserRole } from '../types/announcement'
 
-interface Announcement {
-  id: string
-  title: string
-  content: string
-  author: string
-  author_id: string
-  date: string
-  isImportant: boolean
-  isPinned?: boolean
-  created_at: string
-  profiles?: {
-    username: string
-    full_name?: string
-  }
-  reactions?: AnnouncementReaction[]
-  reaction_count?: number
-  user_has_reacted?: boolean
-}
-
-interface AnnouncementReaction {
-  id: string
-  announcement_id: string
-  user_id: string
-  reaction_type: string
-  created_at: string
+// Role-based permissions
+const ROLES: { [key: string]: UserRole } = {
+  employee: { canPost: false, canEditAll: false, canPin: false, canDeleteAll: false, isAdmin: false },
+  manager: { canPost: true, canEditAll: false, canPin: true, canDeleteAll: false, isAdmin: false },
+  admin: { canPost: true, canEditAll: true, canPin: true, canDeleteAll: true, isAdmin: true }
 }
 
 export default function AnnouncementsScreen() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [filteredAnnouncements, setFilteredAnnouncements] = useState<Announcement[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [isModalVisible, setModalVisible] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterImportant, setFilterImportant] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null)
   const [newAnnouncement, setNewAnnouncement] = useState({
     title: '',
     content: '',
     isImportant: false,
-    isPinned: false
+    isPinned: false,
+    category_id: ''
   })
+  const [attachments, setAttachments] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const { user } = useAuth()
+  const [userRole, setUserRole] = useState<UserRole>(ROLES.employee)
 
   useEffect(() => {
     fetchAnnouncements()
+    fetchCategories()
     setupRealtimeSubscription()
+    checkUserRole()
   }, [])
 
   useEffect(() => {
     filterAnnouncements()
-  }, [announcements, searchQuery, filterImportant])
+  }, [announcements, searchQuery, filterImportant, selectedCategory])
+
+const checkUserRole = async () => {
+  if (!user) {
+    console.log('No user found, setting default employee role')
+    setUserRole(ROLES.employee)
+    return
+  }
+
+  try {
+    console.log('Checking role for user:', user.id)
+    
+    // Fetch role from profiles table
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (error) {
+      console.error('Error fetching profile:', error)
+      // Fallback to employee role
+      setUserRole(ROLES.employee)
+      return
+    }
+
+    console.log('Profile role:', profile?.role)
+
+    // Set role based on profile data
+    switch (profile?.role) {
+      case 'admin':
+        setUserRole(ROLES.admin)
+        console.log('User role set to: admin')
+        break
+      case 'manager':
+        setUserRole(ROLES.manager)
+        console.log('User role set to: manager')
+        break
+      default:
+        setUserRole(ROLES.employee)
+        console.log('User role set to: employee')
+    }
+  } catch (error) {
+    console.error('Error in checkUserRole:', error)
+    setUserRole(ROLES.employee)
+  }
+}
+  
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('announcement_categories')
+        .select('*')
+        .order('name')
+
+      if (error) throw error
+      setCategories(data || [])
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+    }
+  }
 
   const filterAnnouncements = () => {
     let filtered = [...announcements]
@@ -69,6 +132,10 @@ export default function AnnouncementsScreen() {
 
     if (filterImportant) {
       filtered = filtered.filter(item => item.isImportant)
+    }
+
+    if (selectedCategory) {
+      filtered = filtered.filter(item => item.category_id === selectedCategory)
     }
 
     filtered.sort((a, b) => {
@@ -93,6 +160,17 @@ export default function AnnouncementsScreen() {
           profiles:author_id (
             username,
             full_name
+          ),
+          categories:category_id (
+            id,
+            name,
+            color,
+            icon
+          ),
+          attachments:announcement_attachments(*),
+          announcement_reads!left(
+            id,
+            read_at
           )
         `)
         .order('created_at', { ascending: false })
@@ -100,11 +178,26 @@ export default function AnnouncementsScreen() {
       if (error) throw error
 
       if (data) {
-        const announcementsWithReactions = await Promise.all(
+        const announcementsWithDetails = await Promise.all(
           data.map(async (item) => {
+            // Fetch reactions
             const { data: reactions, error: reactionsError } = await supabase
               .from('announcement_reactions')
               .select('*')
+              .eq('announcement_id', item.id)
+
+            // Check if user has read the announcement
+            const { data: readReceipt } = await supabase
+              .from('announcement_reads')
+              .select('*')
+              .eq('announcement_id', item.id)
+              .eq('user_id', user?.id)
+              .single()
+
+            // Get read count
+            const { count: readCount } = await supabase
+              .from('announcement_reads')
+              .select('*', { count: 'exact', head: true })
               .eq('announcement_id', item.id)
 
             const userHasReacted = reactions?.some(r => r.user_id === user?.id) || false
@@ -123,14 +216,21 @@ export default function AnnouncementsScreen() {
               isImportant: item.is_important,
               isPinned: item.is_pinned || false,
               created_at: item.created_at,
+              category_id: item.category_id,
+              has_attachments: item.has_attachments,
+              categories: item.categories,
+              attachments: item.attachments || [],
               reactions: reactions || [],
               reaction_count: reactions?.length || 0,
-              user_has_reacted: userHasReacted
+              user_has_reacted: userHasReacted,
+              read_receipts: item.announcement_reads,
+              is_read: !!readReceipt,
+              read_count: readCount || 0
             }
           })
         )
 
-        setAnnouncements(announcementsWithReactions)
+        setAnnouncements(announcementsWithDetails)
       }
     } catch (error) {
       console.error('Error fetching announcements:', error)
@@ -165,10 +265,86 @@ export default function AnnouncementsScreen() {
           fetchAnnouncements()
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'announcement_reads'
+        },
+        () => {
+          fetchAnnouncements()
+        }
+      )
       .subscribe()
 
     return () => {
       subscription.unsubscribe()
+    }
+  }
+
+  const markAsRead = async (announcementId: string) => {
+    if (!user) return
+
+    try {
+      const { error } = await supabase
+        .from('announcement_reads')
+        .upsert({
+          announcement_id: announcementId,
+          user_id: user.id,
+          read_at: new Date().toISOString()
+        }, {
+          onConflict: 'announcement_id,user_id'
+        })
+
+      if (error) throw error
+    } catch (error) {
+      console.error('Error marking as read:', error)
+    }
+  }
+
+  const uploadAttachments = async (announcementId: string, files: File[]) => {
+    setUploading(true)
+    try {
+      for (const file of files) {
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${Math.random()}.${fileExt}`
+        
+        const { error: uploadError } = await supabase.storage
+          .from('announcement-attachments')
+          .upload(fileName, file)
+
+        if (uploadError) throw uploadError
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('announcement-attachments')
+          .getPublicUrl(fileName)
+
+        const { error: dbError } = await supabase
+          .from('announcement_attachments')
+          .insert({
+            announcement_id: announcementId,
+            file_name: file.name,
+            file_url: publicUrl,
+            file_type: file.type,
+            file_size: file.size,
+            uploaded_by: user?.id
+          })
+
+        if (dbError) throw dbError
+      }
+
+      // Update announcement to mark it has attachments
+      await supabase
+        .from('announcements')
+        .update({ has_attachments: true })
+        .eq('id', announcementId)
+
+    } catch (error) {
+      console.error('Error uploading attachments:', error)
+      throw error
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -183,6 +359,11 @@ export default function AnnouncementsScreen() {
       return
     }
 
+    if (!userRole.canPost) {
+      Alert.alert('Error', 'You do not have permission to post announcements')
+      return
+    }
+
     try {
       setLoading(true)
       const { data, error } = await supabase
@@ -193,15 +374,22 @@ export default function AnnouncementsScreen() {
             content: newAnnouncement.content.trim(),
             author_id: user.id,
             is_important: newAnnouncement.isImportant,
-            is_pinned: newAnnouncement.isPinned
+            is_pinned: newAnnouncement.isPinned,
+            category_id: newAnnouncement.category_id || null
           }
         ])
         .select()
 
       if (error) throw error
 
-      if (data) {
-        setNewAnnouncement({ title: '', content: '', isImportant: false, isPinned: false })
+      if (data && data[0]) {
+        // Upload attachments if any
+        if (attachments.length > 0) {
+          await uploadAttachments(data[0].id, attachments)
+        }
+
+        setNewAnnouncement({ title: '', content: '', isImportant: false, isPinned: false, category_id: '' })
+        setAttachments([])
         setModalVisible(false)
         Alert.alert('Success', 'Announcement posted successfully!')
       }
@@ -221,6 +409,11 @@ export default function AnnouncementsScreen() {
       return
     }
 
+    if (!userRole.canEditAll && user?.id !== editingAnnouncement.author_id) {
+      Alert.alert('Error', 'You can only edit your own announcements')
+      return
+    }
+
     try {
       setLoading(true)
       const { error } = await supabase
@@ -230,16 +423,17 @@ export default function AnnouncementsScreen() {
           content: newAnnouncement.content.trim(),
           is_important: newAnnouncement.isImportant,
           is_pinned: newAnnouncement.isPinned,
+          category_id: newAnnouncement.category_id || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', editingAnnouncement.id)
-        .eq('author_id', user?.id)
 
       if (error) throw error
 
       Alert.alert('Success', 'Announcement updated successfully!')
       setEditingAnnouncement(null)
-      setNewAnnouncement({ title: '', content: '', isImportant: false, isPinned: false })
+      setNewAnnouncement({ title: '', content: '', isImportant: false, isPinned: false, category_id: '' })
+      setAttachments([])
       setModalVisible(false)
     } catch (error) {
       console.error('Error updating announcement:', error)
@@ -250,7 +444,7 @@ export default function AnnouncementsScreen() {
   }
 
   const deleteAnnouncement = async (announcementId: string, authorId: string) => {
-    if (user?.id !== authorId) {
+    if (!userRole.canDeleteAll && user?.id !== authorId) {
       Alert.alert('Error', 'You can only delete your own announcements')
       return
     }
@@ -267,8 +461,19 @@ export default function AnnouncementsScreen() {
             try {
               setLoading(true)
               
+              // Delete related records first
               await supabase
                 .from('announcement_reactions')
+                .delete()
+                .eq('announcement_id', announcementId)
+
+              await supabase
+                .from('announcement_reads')
+                .delete()
+                .eq('announcement_id', announcementId)
+
+              await supabase
+                .from('announcement_attachments')
                 .delete()
                 .eq('announcement_id', announcementId)
 
@@ -292,41 +497,66 @@ export default function AnnouncementsScreen() {
     )
   }
 
-  const toggleReaction = async (announcementId: string) => {
-    if (!user) {
-      Alert.alert('Error', 'You must be logged in to react')
-      return
+const toggleReaction = async (announcementId: string) => {
+  if (!user) {
+    Alert.alert('Error', 'You must be logged in to react')
+    return
+  }
+
+  try {
+    // First check if the user already has a reaction
+    const { data: existingReaction, error: checkError } = await supabase
+      .from('announcement_reactions')
+      .select('id')
+      .eq('announcement_id', announcementId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
+      throw checkError
     }
 
-    try {
-      const announcement = announcements.find(a => a.id === announcementId)
-      
-      if (announcement?.user_has_reacted) {
-        const { error } = await supabase
-          .from('announcement_reactions')
-          .delete()
-          .eq('announcement_id', announcementId)
-          .eq('user_id', user.id)
+    if (existingReaction) {
+      // User has already reacted, so remove the reaction
+      const { error: deleteError } = await supabase
+        .from('announcement_reactions')
+        .delete()
+        .eq('announcement_id', announcementId)
+        .eq('user_id', user.id)
 
-        if (error) throw error
-      } else {
-        const { error } = await supabase
-          .from('announcement_reactions')
-          .insert({
-            announcement_id: announcementId,
-            user_id: user.id,
-            reaction_type: 'like'
-          })
+      if (deleteError) throw deleteError
+    } else {
+      // User hasn't reacted, so add a reaction
+      const { error: insertError } = await supabase
+        .from('announcement_reactions')
+        .insert({
+          announcement_id: announcementId,
+          user_id: user.id,
+          reaction_type: 'like'
+        })
 
-        if (error) throw error
-      }
-    } catch (error) {
-      console.error('Error toggling reaction:', error)
+      if (insertError) throw insertError
+    }
+  } catch (error: any) {
+    console.error('Error toggling reaction:', error)
+    
+    // Handle specific error cases
+    if (error.code === '23505') {
+      // This shouldn't happen with our check, but handle it gracefully
+      console.log('Duplicate reaction detected, refreshing data...')
+      fetchAnnouncements() // Refresh to sync state
+    } else {
       Alert.alert('Error', 'Failed to update reaction')
     }
   }
+}
 
   const togglePin = async (announcementId: string, currentPinStatus: boolean) => {
+    if (!userRole.canPin) {
+      Alert.alert('Error', 'You do not have permission to pin announcements')
+      return
+    }
+
     try {
       const { error } = await supabase
         .from('announcements')
@@ -348,7 +578,8 @@ export default function AnnouncementsScreen() {
       title: announcement.title,
       content: announcement.content,
       isImportant: announcement.isImportant,
-      isPinned: announcement.isPinned || false
+      isPinned: announcement.isPinned || false,
+      category_id: announcement.category_id || ''
     })
     setModalVisible(true)
   }
@@ -356,13 +587,69 @@ export default function AnnouncementsScreen() {
   const closeModal = () => {
     setModalVisible(false)
     setEditingAnnouncement(null)
-    setNewAnnouncement({ title: '', content: '', isImportant: false, isPinned: false })
+    setNewAnnouncement({ title: '', content: '', isImportant: false, isPinned: false, category_id: '' })
+    setAttachments([])
   }
 
   const clearSearch = () => {
     setSearchQuery('')
     setFilterImportant(false)
+    setSelectedCategory('')
   }
+
+  const handleAttachmentPress = async (attachment: Attachment) => {
+    try {
+      const supported = await Linking.canOpenURL(attachment.file_url)
+      if (supported) {
+        await Linking.openURL(attachment.file_url)
+      } else {
+        Alert.alert('Error', 'Cannot open this file type')
+      }
+    } catch (error) {
+      console.error('Error opening attachment:', error)
+      Alert.alert('Error', 'Failed to open attachment')
+    }
+  }
+
+  const renderAttachment = (attachment: Attachment) => (
+    <TouchableOpacity
+      key={attachment.id}
+      style={styles.attachmentItem}
+      onPress={() => handleAttachmentPress(attachment)}
+    >
+      <Text style={styles.attachmentIcon}>📎</Text>
+      <View style={styles.attachmentInfo}>
+        <Text style={styles.attachmentName} numberOfLines={1}>
+          {attachment.file_name}
+        </Text>
+        <Text style={styles.attachmentSize}>
+          {(attachment.file_size / 1024).toFixed(1)} KB
+        </Text>
+      </View>
+    </TouchableOpacity>
+  )
+
+  const renderCategoryChip = (category: Category) => (
+    <TouchableOpacity
+      key={category.id}
+      style={[
+        styles.categoryChip,
+        selectedCategory === category.id && styles.categoryChipActive,
+        { borderColor: category.color }
+      ]}
+      onPress={() => setSelectedCategory(
+        selectedCategory === category.id ? '' : category.id
+      )}
+    >
+      <Text style={styles.categoryIcon}>{category.icon}</Text>
+      <Text style={[
+        styles.categoryText,
+        selectedCategory === category.id && styles.categoryTextActive
+      ]}>
+        {category.name}
+      </Text>
+    </TouchableOpacity>
+  )
 
   return (
     <View style={styles.container}>
@@ -393,6 +680,15 @@ export default function AnnouncementsScreen() {
           )}
         </View>
         
+        {/* Categories Filter */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoriesContainer}
+        >
+          {categories.map(renderCategoryChip)}
+        </ScrollView>
+
         <View style={styles.filterSection}>
           <TouchableOpacity
             style={[styles.filterChip, filterImportant && styles.filterChipActive]}
@@ -410,7 +706,7 @@ export default function AnnouncementsScreen() {
             <Text style={styles.resultCount}>
               {filteredAnnouncements.length} {filteredAnnouncements.length === 1 ? 'announcement' : 'announcements'}
             </Text>
-            {(searchQuery || filterImportant) && (
+            {(searchQuery || filterImportant || selectedCategory) && (
               <TouchableOpacity style={styles.clearFiltersButton} onPress={clearSearch}>
                 <Text style={styles.clearFiltersText}>Clear all</Text>
               </TouchableOpacity>
@@ -419,17 +715,19 @@ export default function AnnouncementsScreen() {
         </View>
       </View>
 
-      {/* Enhanced Create Button */}
-      <TouchableOpacity 
-        style={styles.createButton}
-        onPress={() => setModalVisible(true)}
-        disabled={loading}
-      >
-        <View style={styles.createButtonIcon}>
-          <Text style={styles.createButtonIconText}>+</Text>
-        </View>
-        <Text style={styles.createButtonText}>Create Announcement</Text>
-      </TouchableOpacity>
+      {/* Enhanced Create Button - Only show if user has permission */}
+      {userRole.canPost && (
+        <TouchableOpacity 
+          style={styles.createButton}
+          onPress={() => setModalVisible(true)}
+          disabled={loading}
+        >
+          <View style={styles.createButtonIcon}>
+            <Text style={styles.createButtonIconText}>+</Text>
+          </View>
+          <Text style={styles.createButtonText}>Create Announcement</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Enhanced Announcements List */}
       {loading && announcements.length === 0 ? (
@@ -446,11 +744,16 @@ export default function AnnouncementsScreen() {
           onRefresh={fetchAnnouncements}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
-            <View style={[
-              styles.announcementCard,
-              item.isPinned && styles.pinnedCard,
-              item.isImportant && styles.importantCard
-            ]}>
+            <TouchableOpacity
+              style={[
+                styles.announcementCard,
+                item.isPinned && styles.pinnedCard,
+                item.isImportant && styles.importantCard,
+                !item.is_read && styles.unreadCard
+              ]}
+              onPress={() => markAsRead(item.id)}
+              activeOpacity={0.7}
+            >
               {/* Card Header */}
               <View style={styles.cardHeader}>
                 <View style={styles.authorSection}>
@@ -466,6 +769,11 @@ export default function AnnouncementsScreen() {
                 </View>
                 
                 <View style={styles.badgeContainer}>
+                  {!item.is_read && (
+                    <View style={[styles.badge, styles.unreadBadge]}>
+                      <Text style={styles.badgeText}>NEW</Text>
+                    </View>
+                  )}
                   {item.isPinned && (
                     <View style={[styles.badge, styles.pinnedBadge]}>
                       <Text style={styles.badgeText}>📌 Pinned</Text>
@@ -476,6 +784,17 @@ export default function AnnouncementsScreen() {
                       <Text style={styles.badgeText}>⭐ Important</Text>
                     </View>
                   )}
+                  {item.categories && (
+                    <View style={[
+                      styles.badge, 
+                      styles.categoryBadge,
+                      { backgroundColor: item.categories.color + '20' }
+                    ]}>
+                      <Text style={[styles.badgeText, { color: item.categories.color }]}>
+                        {item.categories.icon} {item.categories.name}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -483,31 +802,47 @@ export default function AnnouncementsScreen() {
               <Text style={styles.announcementTitle}>{item.title}</Text>
               <Text style={styles.announcementContent}>{item.content}</Text>
 
+              {/* Attachments */}
+              {item.attachments && item.attachments.length > 0 && (
+                <View style={styles.attachmentsContainer}>
+                  <Text style={styles.attachmentsTitle}>Attachments:</Text>
+                  {item.attachments.map(renderAttachment)}
+                </View>
+              )}
+
               {/* Card Footer */}
               <View style={styles.cardFooter}>
-                <TouchableOpacity
-                  style={styles.reactionButton}
-                  onPress={() => toggleReaction(item.id)}
-                >
-                  <Text style={[
-                    styles.reactionIcon,
-                    item.user_has_reacted && styles.reactionIconActive
-                  ]}>
-                    {item.user_has_reacted ? '❤️' : '🤍'}
-                  </Text>
-                  <Text style={styles.reactionCount}>{item.reaction_count}</Text>
-                </TouchableOpacity>
+                <View style={styles.footerLeft}>
+                  <TouchableOpacity
+                    style={styles.reactionButton}
+                    onPress={() => toggleReaction(item.id)}
+                  >
+                    <Text style={[
+                      styles.reactionIcon,
+                      item.user_has_reacted && styles.reactionIconActive
+                    ]}>
+                      {item.user_has_reacted ? '❤️' : '🤍'}
+                    </Text>
+                    <Text style={styles.reactionCount}>{item.reaction_count}</Text>
+                  </TouchableOpacity>
 
-                {user?.id === item.author_id && (
+                  <View style={styles.readStats}>
+                    <Text style={styles.readStatsText}>👁️ {item.read_count || 0}</Text>
+                  </View>
+                </View>
+
+                {(userRole.canEditAll || user?.id === item.author_id) && (
                   <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.pinAction]}
-                      onPress={() => togglePin(item.id, item.isPinned || false)}
-                    >
-                      <Text style={styles.actionButtonText}>
-                        {item.isPinned ? 'Unpin' : 'Pin'}
-                      </Text>
-                    </TouchableOpacity>
+                    {userRole.canPin && (
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.pinAction]}
+                        onPress={() => togglePin(item.id, item.isPinned || false)}
+                      >
+                        <Text style={styles.actionButtonText}>
+                          {item.isPinned ? 'Unpin' : 'Pin'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     
                     <TouchableOpacity
                       style={[styles.actionButton, styles.editAction]}
@@ -525,7 +860,7 @@ export default function AnnouncementsScreen() {
                   </View>
                 )}
               </View>
-            </View>
+            </TouchableOpacity>
           )}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -533,14 +868,16 @@ export default function AnnouncementsScreen() {
                 <Text style={styles.emptyIcon}>📢</Text>
               </View>
               <Text style={styles.emptyTitle}>
-                {searchQuery || filterImportant 
+                {searchQuery || filterImportant || selectedCategory
                   ? 'No announcements found'
                   : 'No announcements yet'}
               </Text>
               <Text style={styles.emptyText}>
-                {searchQuery || filterImportant
+                {searchQuery || filterImportant || selectedCategory
                   ? 'Try adjusting your search or filters'
-                  : 'Be the first to share an announcement!'}
+                  : userRole.canPost 
+                    ? 'Be the first to share an announcement!'
+                    : 'No announcements have been posted yet.'}
               </Text>
             </View>
           }
@@ -566,7 +903,7 @@ export default function AnnouncementsScreen() {
 
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Title</Text>
+              <Text style={styles.inputLabel}>Title *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter announcement title"
@@ -575,10 +912,13 @@ export default function AnnouncementsScreen() {
                 editable={!loading}
                 maxLength={100}
               />
+              <Text style={styles.charCount}>
+                {newAnnouncement.title.length}/100
+              </Text>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Content</Text>
+              <Text style={styles.inputLabel}>Content *</Text>
               <TextInput
                 style={[styles.input, styles.contentInput]}
                 placeholder="Write your announcement here..."
@@ -590,6 +930,41 @@ export default function AnnouncementsScreen() {
                 textAlignVertical="top"
                 maxLength={1000}
               />
+              <Text style={styles.charCount}>
+                {newAnnouncement.content.length}/1000
+              </Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Category</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.categorySelection}
+              >
+                {categories.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.categoryOption,
+                      newAnnouncement.category_id === category.id && styles.categoryOptionActive,
+                      { borderColor: category.color }
+                    ]}
+                    onPress={() => setNewAnnouncement(prev => ({ 
+                      ...prev, 
+                      category_id: prev.category_id === category.id ? '' : category.id 
+                    }))}
+                  >
+                    <Text style={styles.categoryOptionIcon}>{category.icon}</Text>
+                    <Text style={[
+                      styles.categoryOptionText,
+                      newAnnouncement.category_id === category.id && styles.categoryOptionTextActive
+                    ]}>
+                      {category.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
 
             <View style={styles.toggleGroup}>
@@ -611,23 +986,25 @@ export default function AnnouncementsScreen() {
                 <Text style={styles.toggleIcon}>⭐</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.toggleItem}
-                onPress={() => setNewAnnouncement(prev => ({ ...prev, isPinned: !prev.isPinned }))}
-                disabled={loading}
-              >
-                <View style={[
-                  styles.toggleCheckbox,
-                  newAnnouncement.isPinned && styles.toggleCheckboxActive
-                ]}>
-                  {newAnnouncement.isPinned && <Text style={styles.checkmark}>✓</Text>}
-                </View>
-                <View style={styles.toggleContent}>
-                  <Text style={styles.toggleLabel}>Pin to top</Text>
-                  <Text style={styles.toggleDescription}>Keep this announcement at the top</Text>
-                </View>
-                <Text style={styles.toggleIcon}>📌</Text>
-              </TouchableOpacity>
+              {userRole.canPin && (
+                <TouchableOpacity
+                  style={styles.toggleItem}
+                  onPress={() => setNewAnnouncement(prev => ({ ...prev, isPinned: !prev.isPinned }))}
+                  disabled={loading}
+                >
+                  <View style={[
+                    styles.toggleCheckbox,
+                    newAnnouncement.isPinned && styles.toggleCheckboxActive
+                  ]}>
+                    {newAnnouncement.isPinned && <Text style={styles.checkmark}>✓</Text>}
+                  </View>
+                  <View style={styles.toggleContent}>
+                    <Text style={styles.toggleLabel}>Pin to top</Text>
+                    <Text style={styles.toggleDescription}>Keep this announcement at the top</Text>
+                  </View>
+                  <Text style={styles.toggleIcon}>📌</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.modalActions}>
@@ -725,6 +1102,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#64748b',
     fontWeight: 'bold',
+  },
+  categoriesContainer: {
+    marginBottom: 16,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    marginRight: 8,
+  },
+  categoryChipActive: {
+    backgroundColor: '#007AFF10',
+  },
+  categoryIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  categoryText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  categoryTextActive: {
+    color: '#007AFF',
+    fontWeight: '600',
   },
   filterSection: {
     flexDirection: 'row',
@@ -829,6 +1235,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
   },
+  unreadCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+    backgroundColor: '#F0F9FF',
+  },
   pinnedCard: {
     borderLeftWidth: 4,
     borderLeftColor: '#FFD700',
@@ -876,11 +1287,16 @@ const styles = StyleSheet.create({
   badgeContainer: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
   },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+  },
+  unreadBadge: {
+    backgroundColor: '#007AFF',
   },
   pinnedBadge: {
     backgroundColor: '#FFFBEB',
@@ -892,10 +1308,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FCA5A5',
   },
+  categoryBadge: {
+    borderWidth: 1,
+  },
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#92400E',
+  },
+  unreadBadgeText: {
+    color: 'white',
   },
   announcementTitle: {
     fontSize: 18,
@@ -910,6 +1331,42 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 16,
   },
+  attachmentsContainer: {
+    marginBottom: 16,
+  },
+  attachmentsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 8,
+  },
+  attachmentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  attachmentIcon: {
+    fontSize: 16,
+    marginRight: 12,
+  },
+  attachmentInfo: {
+    flex: 1,
+  },
+  attachmentName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1e293b',
+    marginBottom: 2,
+  },
+  attachmentSize: {
+    fontSize: 12,
+    color: '#64748b',
+  },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -917,6 +1374,11 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
+  },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   reactionButton: {
     flexDirection: 'row',
@@ -939,6 +1401,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#475569',
+  },
+  readStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  readStatsText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1065,6 +1536,41 @@ const styles = StyleSheet.create({
   contentInput: {
     height: 120,
     textAlignVertical: 'top',
+  },
+  charCount: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  categorySelection: {
+    flexDirection: 'row',
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    marginRight: 12,
+  },
+  categoryOptionActive: {
+    backgroundColor: '#007AFF10',
+  },
+  categoryOptionIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  categoryOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  categoryOptionTextActive: {
+    color: '#007AFF',
+    fontWeight: '600',
   },
   toggleGroup: {
     marginBottom: 30,
