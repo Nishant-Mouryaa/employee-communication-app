@@ -1,0 +1,80 @@
+
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "export": "Export",
+    "back": "Back"
+  },
+  "announcements": {
+    "title": "Announcements",
+    "subtitle": "Stay updated with company news",
+    "create": "Create Announcement",
+    "edit": "Edit Announcement",
+    "delete": "Delete Announcement",
+    "deleteConfirm": "Are you sure you want to delete this announcement?",
+    "noAnnouncements": "No announcements yet",
+    "searchPlaceholder": "Search announcements...",
+    "important": "Important",
+    "pinned": "Pinned",
+    "scheduled": "Scheduled",
+    "expired": "Expired",
+    "active": "Active"
+  },
+  "analytics": {
+    "title": "Analytics Dashboard",
+    "overview": "Overview",
+    "totalViews": "Total Views",
+    "totalReactions": "Total Reactions",
+    "totalComments": "Total Comments",
+    "activeUsers": "Active Users",
+    "engagementRate": "Engagement Rate",
+    "topAnnouncements": "Top Announcements",
+    "recentActivity": "Recent Activity",
+    "dateRange": "Date Range",
+    "last7Days": "Last 7 Days",
+    "last30Days": "Last 30 Days",
+    "last90Days": "Last 90 Days",
+    "custom": "Custom"
+  },
+  "versionHistory": {
+    "title": "Version History",
+    "version": "Version",
+    "changedBy": "Changed by",
+    "noVersions": "No version history available",
+    "compareVersions": "Compare Versions",
+    "restoreVersion": "Restore Version",
+    "restoreConfirm": "Are you sure you want to restore this version?"
+  },
+  "export": {
+    "title": "Export Data",
+    "format": "Export Format",
+    "pdf": "PDF Document",
+    "excel": "Excel Spreadsheet",
+    "csv": "CSV File",
+    "json": "JSON Data",
+    "options": "Export Options",
+    "dateRange": "Date Range",
+    "includeComments": "Include Comments",
+    "includeAnalytics": "Include Analytics",
+    "includeAttachments": "Include Attachments",
+    "selectCategories": "Select Categories",
+    "exportButton": "Export",
+    "exporting": "Exporting..."
+  },
+  "settings": {
+    "language": "Language",
+    "selectLanguage": "Select Language",
+    "notifications": "Notifications",
+    "appearance": "Appearance",
+    "about": "About"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "common": {
+    "loading": "Laden...",
+    "error": "Fehler",
+    "success": "Erfolg",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "search": "Suchen",
+    "filter": "Filtern",
+    "sort": "Sortieren",
+    "export": "Exportieren",
+    "back": "Zurück"
+  },
+  "announcements": {
+    "title": "Ankündigungen",
+    "subtitle": "Bleiben Sie mit Unternehmensnachrichten auf dem Laufenden",
+    "create": "Ankündigung Erstellen",
+    "edit": "Ankündigung Bearbeiten",
+    "delete": "Ankündigung Löschen",
+    "deleteConfirm": "Sind Sie sicher, dass Sie diese Ankündigung löschen möchten?",
+    "noAnnouncements": "Noch keine Ankündigungen",
+    "searchPlaceholder": "Ankündigungen durchsuchen...",
+    "important": "Wichtig",
+    "pinned": "Angeheftet",
+    "scheduled": "Geplant",
+    "expired": "Abgelaufen",
+    "active": "Aktiv"
+  },
+  "analytics": {
+    "title": "Analytik-Dashboard",
+    "overview": "Übersicht",
+    "totalViews": "Gesamtansichten",
+    "totalReactions": "Gesamtreaktionen",
+    "totalComments": "Gesamtkommentare",
+    "activeUsers": "Aktive Benutzer",
+    "engagementRate": "Engagement-Rate",
+    "topAnnouncements": "Top-Ankündigungen",
+    "recentActivity": "Letzte Aktivität",
+    "dateRange": "Zeitraum",
+    "last7Days": "Letzte 7 Tage",
+    "last30Days": "Letzte 30 Tage",
+    "last90Days": "Letzte 90 Tage",
+    "custom": "Benutzerdefiniert"
+  },
+  "versionHistory": {
+    "title": "Versionsverlauf",
+    "version": "Version",
+    "changedBy": "Geändert von",
+    "noVersions": "Kein Versionsverlauf verfügbar",
+    "compareVersions": "Versionen Vergleichen",
+    "restoreVersion": "Version Wiederherstellen",
+    "restoreConfirm": "Sind Sie sicher, dass Sie diese Version wiederherstellen möchten?"
+  },
+  "export": {
+    "title": "Daten Exportieren",
+    "format": "Exportformat",
+    "pdf": "PDF-Dokument",
+    "excel": "Excel-Tabelle",
+    "csv": "CSV-Datei",
+    "json": "JSON-Daten",
+    "options": "Exportoptionen",
+    "dateRange": "Zeitraum",
+    "includeComments": "Kommentare Einschließen",
+    "includeAnalytics": "Analytik Einschließen",
+    "includeAttachments": "Anhänge Einschließen",
+    "selectCategories": "Kategorien Auswählen",
+    "exportButton": "Exportieren",
+    "exporting": "Exportieren..."
+  },
+  "settings": {
+    "language": "Sprache",
+    "selectLanguage": "Sprache Auswählen",
+    "notifications": "Benachrichtigungen",
+    "appearance": "Erscheinungsbild",
+    "about": "Über"
+  }
+}

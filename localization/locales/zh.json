@@ -1,0 +1,79 @@
+{
+  "common": {
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "search": "搜索",
+    "filter": "筛选",
+    "sort": "排序",
+    "export": "导出",
+    "back": "返回"
+  },
+  "announcements": {
+    "title": "公告",
+    "subtitle": "及时了解公司新闻",
+    "create": "创建公告",
+    "edit": "编辑公告",
+    "delete": "删除公告",
+    "deleteConfirm": "确定要删除此公告吗？",
+    "noAnnouncements": "暂无公告",
+    "searchPlaceholder": "搜索公告...",
+    "important": "重要",
+    "pinned": "置顶",
+    "scheduled": "已计划",
+    "expired": "已过期",
+    "active": "活跃"
+  },
+  "analytics": {
+    "title": "分析仪表板",
+    "overview": "概览",
+    "totalViews": "总浏览量",
+    "totalReactions": "总互动数",
+    "totalComments": "总评论数",
+    "activeUsers": "活跃用户",
+    "engagementRate": "参与率",
+    "topAnnouncements": "热门公告",
+    "recentActivity": "最近活动",
+    "dateRange": "日期范围",
+    "last7Days": "最近7天",
+    "last30Days": "最近30天",
+    "last90Days": "最近90天",
+    "custom": "自定义"
+  },
+  "versionHistory": {
+    "title": "版本历史",
+    "version": "版本",
+    "changedBy": "修改者",
+    "noVersions": "暂无版本历史",
+    "compareVersions": "比较版本",
+    "restoreVersion": "恢复版本",
+    "restoreConfirm": "确定要恢复此版本吗？"
+  },
+  "export": {
+    "title": "导出数据",
+    "format": "导出格式",
+    "pdf": "PDF文档",
+    "excel": "Excel表格",
+    "csv": "CSV文件",
+    "json": "JSON数据",
+    "options": "导出选项",
+    "dateRange": "日期范围",
+    "includeComments": "包含评论",
+    "includeAnalytics": "包含分析数据",
+    "includeAttachments": "包含附件",
+    "selectCategories": "选择分类",
+    "exportButton": "导出",
+    "exporting": "导出中..."
+  },
+  "settings": {
+    "language": "语言",
+    "selectLanguage": "选择语言",
+    "notifications": "通知",
+    "appearance": "外观",
+    "about": "关于"
+  }
+}

@@ -1,0 +1,80 @@
+
+{
+  "common": {
+    "loading": "جاري التحميل...",
+    "error": "خطأ",
+    "success": "نجاح",
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "search": "بحث",
+    "filter": "تصفية",
+    "sort": "ترتيب",
+    "export": "تصدير",
+    "back": "رجوع"
+  },
+  "announcements": {
+    "title": "الإعلانات",
+    "subtitle": "ابق على اطلاع بآخر أخبار الشركة",
+    "create": "إنشاء إعلان",
+    "edit": "تعديل الإعلان",
+    "delete": "حذف الإعلان",
+    "deleteConfirm": "هل أنت متأكد من أنك تريد حذف هذا الإعلان؟",
+    "noAnnouncements": "لا توجد إعلانات حتى الآن",
+    "searchPlaceholder": "البحث في الإعلانات...",
+    "important": "مهم",
+    "pinned": "مثبت",
+    "scheduled": "مجدول",
+    "expired": "منتهي الصلاحية",
+    "active": "نشط"
+  },
+  "analytics": {
+    "title": "لوحة التحليلات",
+    "overview": "نظرة عامة",
+    "totalViews": "إجمالي المشاهدات",
+    "totalReactions": "إجمالي التفاعلات",
+    "totalComments": "إجمالي التعليقات",
+    "activeUsers": "المستخدمين النشطين",
+    "engagementRate": "معدل المشاركة",
+    "topAnnouncements": "أفضل الإعلانات",
+    "recentActivity": "النشاط الأخير",
+    "dateRange": "النطاق الزمني",
+    "last7Days": "آخر 7 أيام",
+    "last30Days": "آخر 30 يوم",
+    "last90Days": "آخر 90 يوم",
+    "custom": "مخصص"
+  },
+  "versionHistory": {
+    "title": "سجل الإصدارات",
+    "version": "الإصدار",
+    "changedBy": "تم التغيير بواسطة",
+    "noVersions": "لا يوجد سجل إصدارات متاح",
+    "compareVersions": "مقارنة الإصدارات",
+    "restoreVersion": "استعادة الإصدار",
+    "restoreConfirm": "هل أنت متأكد من أنك تريد استعادة هذا الإصدار؟"
+  },
+  "export": {
+    "title": "تصدير البيانات",
+    "format": "صيغة التصدير",
+    "pdf": "مستند PDF",
+    "excel": "جدول Excel",
+    "csv": "ملف CSV",
+    "json": "بيانات JSON",
+    "options": "خيارات التصدير",
+    "dateRange": "النطاق الزمني",
+    "includeComments": "تضمين التعليقات",
+    "includeAnalytics": "تضمين التحليلات",
+    "includeAttachments": "تضمين المرفقات",
+    "selectCategories": "اختيار الفئات",
+    "exportButton": "تصدير",
+    "exporting": "جاري التصدير..."
+  },
+  "settings": {
+    "language": "اللغة",
+    "selectLanguage": "اختر اللغة",
+    "notifications": "الإشعارات",
+    "appearance": "المظهر",
+    "about": "حول"
+  }
+}

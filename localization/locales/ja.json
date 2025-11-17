@@ -1,0 +1,79 @@
+{
+  "common": {
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "success": "成功",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "delete": "削除",
+    "edit": "編集",
+    "search": "検索",
+    "filter": "フィルター",
+    "sort": "並び替え",
+    "export": "エクスポート",
+    "back": "戻る"
+  },
+  "announcements": {
+    "title": "お知らせ",
+    "subtitle": "会社のニュースを最新の状態に保つ",
+    "create": "お知らせを作成",
+    "edit": "お知らせを編集",
+    "delete": "お知らせを削除",
+    "deleteConfirm": "このお知らせを削除してもよろしいですか？",
+    "noAnnouncements": "お知らせはまだありません",
+    "searchPlaceholder": "お知らせを検索...",
+    "important": "重要",
+    "pinned": "ピン留め",
+    "scheduled": "予定済み",
+    "expired": "期限切れ",
+    "active": "アクティブ"
+  },
+  "analytics": {
+    "title": "分析ダッシュボード",
+    "overview": "概要",
+    "totalViews": "総閲覧数",
+    "totalReactions": "総リアクション数",
+    "totalComments": "総コメント数",
+    "activeUsers": "アクティブユーザー",
+    "engagementRate": "エンゲージメント率",
+    "topAnnouncements": "人気のお知らせ",
+    "recentActivity": "最近の活動",
+    "dateRange": "期間",
+    "last7Days": "過去7日間",
+    "last30Days": "過去30日間",
+    "last90Days": "過去90日間",
+    "custom": "カスタム"
+  },
+  "versionHistory": {
+    "title": "バージョン履歴",
+    "version": "バージョン",
+    "changedBy": "変更者",
+    "noVersions": "バージョン履歴は利用できません",
+    "compareVersions": "バージョンを比較",
+    "restoreVersion": "バージョンを復元",
+    "restoreConfirm": "このバージョンを復元してもよろしいですか？"
+  },
+  "export": {
+    "title": "データをエクスポート",
+    "format": "エクスポート形式",
+    "pdf": "PDF文書",
+    "excel": "Excelスプレッドシート",
+    "csv": "CSVファイル",
+    "json": "JSONデータ",
+    "options": "エクスポートオプション",
+    "dateRange": "期間",
+    "includeComments": "コメントを含める",
+    "includeAnalytics": "分析データを含める",
+    "includeAttachments": "添付ファイルを含める",
+    "selectCategories": "カテゴリを選択",
+    "exportButton": "エクスポート",
+    "exporting": "エクスポート中..."
+  },
+  "settings": {
+    "language": "言語",
+    "selectLanguage": "言語を選択",
+    "notifications": "通知",
+    "appearance": "外観",
+    "about": "について"
+  }
+}

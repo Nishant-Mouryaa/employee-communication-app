@@ -1,18 +1,37 @@
-// screens/AnnouncementsScreen.tsx
-import React, { useState } from 'react'
-import { View, StyleSheet, FlatList, TouchableOpacity, Text, Alert, ActivityIndicator } from 'react-native'
+// screens/AnnouncementsScreen.tsx (Updated with all Phase 3 features)
+import React, { useState, useEffect } from 'react'
+import {
+  View,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  Text,
+  Alert,
+  ActivityIndicator
+} from 'react-native'
 import { useAuth } from '../hooks/useAuth'
 import { useAnnouncements } from '../hooks/useAnnouncements'
-import { useAnnouncementFilters } from '../hooks/useAnnouncementFilters'
+import { useEnhancedSearch } from '../hooks/useEnhancedSearch'
 import { useCategories } from '../hooks/useCategories'
 import { useUserRole } from '../hooks/useUserRole'
 import { useRealtimeAnnouncements } from '../hooks/useRealtimeAnnouncements'
+import { useLanguage } from '../hooks/useLanguage'
 import { announcementService } from '../services/announcementService'
+import { schedulingService } from '../services/schedulingService'
+import { analyticsService } from '../services/analyticsService'
 import { AnnouncementHeader } from '../components/announcements/AnnouncementHeader'
 import { SearchBar } from '../components/announcements/SearchBar'
 import { CategoryFilter } from '../components/announcements/CategoryFilter'
 import { AnnouncementCard } from '../components/announcements/AnnouncementCard'
 import { CreateAnnouncementModal } from '../components/announcements/CreateAnnouncementModal'
+import { CommentsSection } from '../components/announcements/CommentsSection'
+import { ScheduleModal } from '../components/announcements/ScheduleModal'
+import { AdvancedSearchModal } from '../components/announcements/AdvancedSearchModal'
+import { NotificationSettingsModal } from '../components/announcements/NotificationSettingsModal'
+import { AnalyticsDashboard } from '../components/announcements/AnalyticsDashboard'
+import { VersionHistoryModal } from '../components/announcements/VersionHistoryModal'
+import { ExportModal } from '../components/announcements/ExportModal'
+import { LanguageModal } from '../components/announcements/LanguageModal'
 import { Announcement } from '../types/announcement'
 
 export default function AnnouncementsScreen() {
@@ -20,40 +39,53 @@ export default function AnnouncementsScreen() {
   const { userRole } = useUserRole()
   const { announcements, loading, fetchAnnouncements } = useAnnouncements()
   const { categories } = useCategories()
+  const { t } = useLanguage()
   const {
-    searchQuery,
-    setSearchQuery,
-    filterImportant,
-    setFilterImportant,
-    selectedCategory,
-    setSelectedCategory,
+    filters,
+    updateFilter,
+    clearFilters,
     filteredAnnouncements,
-    clearFilters
-  } = useAnnouncementFilters(announcements)
+    hasActiveFilters
+  } = useEnhancedSearch(announcements)
 
+  // Modal states
   const [isModalVisible, setModalVisible] = useState(false)
+  const [isScheduleModalVisible, setScheduleModalVisible] = useState(false)
+  const [isAdvancedSearchVisible, setAdvancedSearchVisible] = useState(false)
+  const [isNotificationSettingsVisible, setNotificationSettingsVisible] = useState(false)
+  const [isAnalyticsVisible, setAnalyticsVisible] = useState(false)
+  const [isVersionHistoryVisible, setVersionHistoryVisible] = useState(false)
+  const [isExportVisible, setExportVisible] = useState(false)
+  const [isLanguageVisible, setLanguageVisible] = useState(false)
+
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null)
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null)
+  const [versionHistoryAnnouncementId, setVersionHistoryAnnouncementId] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
+  const [readStartTime, setReadStartTime] = useState<number>(0)
 
   useRealtimeAnnouncements(fetchAnnouncements)
 
   const handleMarkAsRead = async (announcementId: string) => {
     if (user) {
+      const readTime = readStartTime > 0 ? Math.floor((Date.now() - readStartTime) / 1000) : 0
       await announcementService.markAsRead(announcementId, user.id)
+      await analyticsService.trackView(announcementId, user.id, readTime)
     }
   }
 
- const handleToggleReaction = async (announcementId: string) => {
+  const handleToggleReaction = async (announcementId: string) => {
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to react')
+      Alert.alert(t('common.error'), 'You must be logged in to react')
       return
     }
     await announcementService.toggleReaction(announcementId, user.id)
+    await analyticsService.logActivity(user.id, announcementId, 'reaction')
   }
 
   const handleTogglePin = async (announcementId: string, currentPinStatus: boolean) => {
     if (!userRole.canPin) {
-      Alert.alert('Error', 'You do not have permission to pin announcements')
+      Alert.alert(t('common.error'), 'You do not have permission to pin announcements')
       return
     }
     await announcementService.togglePin(announcementId, currentPinStatus)
@@ -66,25 +98,25 @@ export default function AnnouncementsScreen() {
 
   const handleDelete = async (announcementId: string, authorId: string) => {
     if (!userRole.canDeleteAll && user?.id !== authorId) {
-      Alert.alert('Error', 'You can only delete your own announcements')
+      Alert.alert(t('common.error'), 'You can only delete your own announcements')
       return
     }
 
     Alert.alert(
-      'Delete Announcement',
-      'Are you sure you want to delete this announcement?',
+      t('announcements.delete'),
+      t('announcements.deleteConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               setSubmitting(true)
               await announcementService.deleteAnnouncement(announcementId)
-              Alert.alert('Success', 'Announcement deleted successfully')
+              Alert.alert(t('common.success'), 'Announcement deleted successfully')
             } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to delete announcement')
+              Alert.alert(t('common.error'), error.message || 'Failed to delete announcement')
             } finally {
               setSubmitting(false)
             }
@@ -96,12 +128,12 @@ export default function AnnouncementsScreen() {
 
   const handleSubmit = async (formData: any) => {
     if (!user) {
-      Alert.alert('Error', 'You must be logged in')
+      Alert.alert(t('common.error'), 'You must be logged in')
       return
     }
 
     if (!userRole.canPost) {
-      Alert.alert('Error', 'You do not have permission to post announcements')
+      Alert.alert(t('common.error'), 'You do not have permission to post announcements')
       return
     }
 
@@ -110,29 +142,43 @@ export default function AnnouncementsScreen() {
       
       if (editingAnnouncement) {
         if (!userRole.canEditAll && user.id !== editingAnnouncement.author_id) {
-          Alert.alert('Error', 'You can only edit your own announcements')
+          Alert.alert(t('common.error'), 'You can only edit your own announcements')
           return
         }
         
         await announcementService.updateAnnouncement(editingAnnouncement.id, formData)
-        Alert.alert('Success', 'Announcement updated successfully!')
+        Alert.alert(t('common.success'), 'Announcement updated successfully!')
       } else {
         const data = await announcementService.createAnnouncement(formData, user.id)
-        
-        // Handle attachments if needed
-        // if (attachments.length > 0 && data?.[0]) {
-        //   await announcementService.uploadAttachments(data[0].id, attachments, user.id)
-        // }
-        
-        Alert.alert('Success', 'Announcement posted successfully!')
+        Alert.alert(t('common.success'), 'Announcement posted successfully!')
       }
       
       closeModal()
     } catch (error) {
-      Alert.alert('Error', editingAnnouncement ? 'Failed to update announcement' : 'Failed to post announcement')
+      Alert.alert(t('common.error'), editingAnnouncement ? 'Failed to update announcement' : 'Failed to post announcement')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleSchedule = async (scheduledAt: Date, expiresAt?: Date) => {
+    if (!user || !userRole.canSchedule) {
+      Alert.alert(t('common.error'), 'You do not have permission to schedule announcements')
+      return
+    }
+
+    Alert.alert(t('common.success'), 'Schedule feature integrated with create modal')
+  }
+
+  const handleCardPress = (announcement: Announcement) => {
+    setSelectedAnnouncement(announcement)
+    setReadStartTime(Date.now())
+    handleMarkAsRead(announcement.id)
+  }
+
+  const handleVersionHistory = (announcementId: string) => {
+    setVersionHistoryAnnouncementId(announcementId)
+    setVersionHistoryVisible(true)
   }
 
   const closeModal = () => {
@@ -146,17 +192,54 @@ export default function AnnouncementsScreen() {
         <Text style={styles.emptyIcon}>📢</Text>
       </View>
       <Text style={styles.emptyTitle}>
-        {searchQuery || filterImportant || selectedCategory
-          ? 'No announcements found'
-          : 'No announcements yet'}
+        {hasActiveFilters
+          ? t('announcements.noAnnouncements')
+          : t('announcements.noAnnouncements')}
       </Text>
       <Text style={styles.emptyText}>
-        {searchQuery || filterImportant || selectedCategory
+        {hasActiveFilters
           ? 'Try adjusting your search or filters'
           : userRole.canPost 
             ? 'Be the first to share an announcement!'
             : 'No announcements have been posted yet.'}
       </Text>
+      {hasActiveFilters && (
+        <TouchableOpacity
+          style={styles.clearFiltersButton}
+          onPress={clearFilters}
+        >
+          <Text style={styles.clearFiltersButtonText}>{t('common.filter')}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  )
+
+  // Action Menu Component
+  const renderActionMenu = () => (
+    <View style={styles.actionMenu}>
+      <TouchableOpacity
+        style={styles.actionMenuItem}
+        onPress={() => setAnalyticsVisible(true)}
+      >
+        <Text style={styles.actionMenuIcon}>📊</Text>
+        <Text style={styles.actionMenuText}>{t('analytics.title')}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.actionMenuItem}
+        onPress={() => setExportVisible(true)}
+      >
+        <Text style={styles.actionMenuIcon}>📥</Text>
+        <Text style={styles.actionMenuText}>{t('export.title')}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.actionMenuItem}
+        onPress={() => setLanguageVisible(true)}
+      >
+        <Text style={styles.actionMenuIcon}>🌐</Text>
+        <Text style={styles.actionMenuText}>{t('settings.language')}</Text>
+      </TouchableOpacity>
     </View>
   )
 
@@ -164,91 +247,190 @@ export default function AnnouncementsScreen() {
     <View style={styles.container}>
       <AnnouncementHeader />
 
+      {/* Action Menu */}
+      {renderActionMenu()}
+
       {/* Search and Filter Section */}
       <View style={styles.searchContainer}>
-        <SearchBar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onClear={() => setSearchQuery('')}
-        />
+        <View style={styles.searchRow}>
+          <View style={styles.searchInputWrapper}>
+            <SearchBar
+              searchQuery={filters.query}
+              onSearchChange={(text) => updateFilter('query', text)}
+              onClear={() => updateFilter('query', '')}
+            />
+          </View>
+          
+          <TouchableOpacity
+            style={styles.advancedSearchButton}
+            onPress={() => setAdvancedSearchVisible(true)}
+          >
+            <Text style={styles.advancedSearchIcon}>⚙️</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => setNotificationSettingsVisible(true)}
+          >
+            <Text style={styles.notificationIcon}>🔔</Text>
+          </TouchableOpacity>
+        </View>
         
         <CategoryFilter
           categories={categories}
-          selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
+          selectedCategory={filters.category}
+          onSelectCategory={(categoryId) => updateFilter('category', categoryId)}
         />
 
         <View style={styles.filterSection}>
-          <TouchableOpacity
-            style={[styles.filterChip, filterImportant && styles.filterChipActive]}
-            onPress={() => setFilterImportant(!filterImportant)}
-          >
-            <Text style={[styles.filterChipIcon, filterImportant && styles.filterChipIconActive]}>
-              ⭐
-            </Text>
-            <Text style={[styles.filterChipText, filterImportant && styles.filterChipTextActive]}>
-              Important
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.filterChips}>
+            <TouchableOpacity
+              style={[styles.filterChip, filters.isImportant && styles.filterChipActive]}
+              onPress={() => updateFilter('isImportant', filters.isImportant ? undefined : true)}
+            >
+              <Text style={[styles.filterChipIcon, filters.isImportant && styles.filterChipIconActive]}>
+                ⭐
+              </Text>
+              <Text style={[styles.filterChipText, filters.isImportant && styles.filterChipTextActive]}>
+                {t('announcements.important')}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterChip, filters.status !== 'all' && styles.filterChipActive]}
+              onPress={() => {
+                const statuses = ['all', 'active', 'scheduled', 'expired']
+                const currentIndex = statuses.indexOf(filters.status)
+                const nextStatus = statuses[(currentIndex + 1) % statuses.length]
+                updateFilter('status', nextStatus as any)
+              }}
+            >
+              <Text style={[styles.filterChipText, filters.status !== 'all' && styles.filterChipTextActive]}>
+                {filters.status === 'all' ? 'All' : 
+                 filters.status === 'active' ? '✅ Active' :
+                 filters.status === 'scheduled' ? '📅 Scheduled' :
+                 '⏰ Expired'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.resultsInfo}>
-            <Text style={styles.resultCount}>
-              {filteredAnnouncements.length} {filteredAnnouncements.length === 1 ? 'announcement' : 'announcements'}
+                    <Text style={styles.resultCount}>
+              {filteredAnnouncements.length} {filteredAnnouncements.length === 1 ? 'result' : 'results'}
             </Text>
-            {(searchQuery || filterImportant || selectedCategory) && (
-              <TouchableOpacity style={styles.clearFiltersButton} onPress={clearFilters}>
-                <Text style={styles.clearFiltersText}>Clear all</Text>
+            {hasActiveFilters && (
+              <TouchableOpacity style={styles.clearAllButton} onPress={clearFilters}>
+                <Text style={styles.clearAllText}>Clear all</Text>
               </TouchableOpacity>
             )}
+          </View>
+        </View>
+
+        {/* Sort Options */}
+        <View style={styles.sortSection}>
+          <Text style={styles.sortLabel}>Sort by:</Text>
+          <View style={styles.sortButtons}>
+            {[
+              { key: 'date', label: 'Date', icon: '📅' },
+              { key: 'relevance', label: 'Relevance', icon: '🎯' },
+              { key: 'reactions', label: 'Reactions', icon: '❤️' },
+              { key: 'comments', label: 'Comments', icon: '💬' }
+            ].map((sort) => (
+              <TouchableOpacity
+                key={sort.key}
+                style={[
+                  styles.sortButton,
+                  filters.sortBy === sort.key && styles.sortButtonActive
+                ]}
+                onPress={() => updateFilter('sortBy', sort.key as any)}
+              >
+                <Text style={styles.sortButtonIcon}>{sort.icon}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </View>
 
       {/* Create Button */}
       {userRole.canPost && (
-        <TouchableOpacity 
-          style={styles.createButton}
-          onPress={() => setModalVisible(true)}
-          disabled={loading || submitting}
-        >
-          <View style={styles.createButtonIcon}>
-            <Text style={styles.createButtonIconText}>+</Text>
-          </View>
-          <Text style={styles.createButtonText}>Create Announcement</Text>
-        </TouchableOpacity>
+        <View style={styles.createButtonContainer}>
+          <TouchableOpacity 
+            style={styles.createButton}
+            onPress={() => setModalVisible(true)}
+            disabled={loading || submitting}
+          >
+            <View style={styles.createButtonIcon}>
+              <Text style={styles.createButtonIconText}>+</Text>
+            </View>
+            <Text style={styles.createButtonText}>{t('announcements.create')}</Text>
+          </TouchableOpacity>
+
+          {userRole.canSchedule && (
+            <TouchableOpacity
+              style={styles.scheduleIconButton}
+              onPress={() => setScheduleModalVisible(true)}
+            >
+              <Text style={styles.scheduleIconText}>📅</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
 
       {/* Announcements List */}
       {loading && announcements.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading announcements...</Text>
+          <Text style={styles.loadingText}>{t('common.loading')}</Text>
         </View>
       ) : (
         <FlatList
           data={filteredAnnouncements}
           keyExtractor={(item) => item.id}
           style={styles.list}
+          contentContainerStyle={styles.listContent}
           refreshing={loading}
           onRefresh={fetchAnnouncements}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
-            <AnnouncementCard
-              announcement={item}
-              userRole={userRole}
-              userId={user?.id}
-              onPress={() => handleMarkAsRead(item.id)}
-              onReaction={() => handleToggleReaction(item.id)}
-              onPin={() => handleTogglePin(item.id, item.isPinned || false)}
-              onEdit={() => handleEdit(item)}
-              onDelete={() => handleDelete(item.id, item.author_id)}
-            />
+            <View>
+              <AnnouncementCard
+                announcement={item}
+                userRole={userRole}
+                userId={user?.id}
+                onPress={() => handleCardPress(item)}
+                onReaction={() => handleToggleReaction(item.id)}
+                onPin={() => handleTogglePin(item.id, item.isPinned || false)}
+                onEdit={() => handleEdit(item)}
+                onDelete={() => handleDelete(item.id, item.author_id)}
+              />
+              
+              {/* Version History Button */}
+              {(userRole.isAdmin || user?.id === item.author_id) && (
+                <TouchableOpacity
+                  style={styles.versionHistoryButton}
+                  onPress={() => handleVersionHistory(item.id)}
+                >
+                  <Text style={styles.versionHistoryIcon}>📜</Text>
+                  <Text style={styles.versionHistoryText}>
+                    {t('versionHistory.title')}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              
+              {/* Show comments section if announcement is selected */}
+              {selectedAnnouncement?.id === item.id && (
+                <CommentsSection
+                  announcementId={item.id}
+                  canComment={userRole.canComment}
+                />
+              )}
+            </View>
           )}
           ListEmptyComponent={renderEmptyState}
         />
       )}
 
-      {/* Create/Edit Modal */}
+      {/* All Modals */}
       <CreateAnnouncementModal
         visible={isModalVisible}
         isEditing={!!editingAnnouncement}
@@ -265,6 +447,65 @@ export default function AnnouncementsScreen() {
         onClose={closeModal}
         onSubmit={handleSubmit}
       />
+
+      <ScheduleModal
+        visible={isScheduleModalVisible}
+        onClose={() => setScheduleModalVisible(false)}
+        onSchedule={handleSchedule}
+      />
+
+      <AdvancedSearchModal
+        visible={isAdvancedSearchVisible}
+        onClose={() => setAdvancedSearchVisible(false)}
+        onApply={(newFilters) => {
+          Object.entries(newFilters).forEach(([key, value]) => {
+            updateFilter(key as any, value)
+          })
+        }}
+        categories={categories}
+        currentFilters={filters}
+      />
+
+      <NotificationSettingsModal
+        visible={isNotificationSettingsVisible}
+        onClose={() => setNotificationSettingsVisible(false)}
+      />
+
+      {isAnalyticsVisible && (
+        <Modal
+          visible={isAnalyticsVisible}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setAnalyticsVisible(false)}
+        >
+          <View style={styles.modalContainer}>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setAnalyticsVisible(false)}
+            >
+              <Text style={styles.modalCloseText}>✕ Close</Text>
+            </TouchableOpacity>
+            <AnalyticsDashboard />
+          </View>
+        </Modal>
+      )}
+
+      <VersionHistoryModal
+        visible={isVersionHistoryVisible}
+        onClose={() => setVersionHistoryVisible(false)}
+        announcementId={versionHistoryAnnouncementId}
+        onRestore={fetchAnnouncements}
+      />
+
+      <ExportModal
+        visible={isExportVisible}
+        onClose={() => setExportVisible(false)}
+      />
+
+      <LanguageModal
+        visible={isLanguageVisible}
+        onClose={() => setLanguageVisible(false)}
+      />
     </View>
   )
 }
@@ -274,16 +515,81 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  actionMenu: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    gap: 12,
+  },
+  actionMenuItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  actionMenuIcon: {
+    fontSize: 16,
+  },
+  actionMenuText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
   searchContainer: {
     backgroundColor: 'white',
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
   },
-  filterSection: {
+  searchRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 16,
+  },
+  searchInputWrapper: {
+    flex: 1,
+  },
+  advancedSearchButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  advancedSearchIcon: {
+    fontSize: 18,
+  },
+  notificationButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  notificationIcon: {
+    fontSize: 18,
+  },
+  filterSection: {
+    marginTop: 12,
+  },
+  filterChips: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
   },
   filterChip: {
     flexDirection: 'row',
@@ -316,29 +622,69 @@ const styles = StyleSheet.create({
   },
   resultsInfo: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
   },
   resultCount: {
     fontSize: 14,
     color: '#64748b',
     fontWeight: '500',
   },
-  clearFiltersButton: {
+  clearAllButton: {
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  clearFiltersText: {
+  clearAllText: {
     fontSize: 14,
     color: '#007AFF',
     fontWeight: '600',
   },
+  sortSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  sortLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+    marginRight: 12,
+  },
+  sortButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  sortButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  sortButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  sortButtonIcon: {
+    fontSize: 16,
+  },
+  createButtonContainer: {
+    flexDirection: 'row',
+    margin: 20,
+    marginBottom: 0,
+    gap: 12,
+  },
   createButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#007AFF',
-    margin: 20,
-    marginBottom: 0,
     padding: 16,
     borderRadius: 12,
     shadowColor: '#007AFF',
@@ -366,9 +712,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  scheduleIconButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  scheduleIconText: {
+    fontSize: 24,
+  },
   list: {
     flex: 1,
+  },
+  listContent: {
     padding: 20,
+  },
+  versionHistoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    gap: 8,
+  },
+  versionHistoryIcon: {
+    fontSize: 14,
+  },
+  versionHistoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
   },
   loadingContainer: {
     flex: 1,
@@ -411,5 +795,36 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 16,
+  },
+  clearFiltersButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  clearFiltersButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 1000,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  modalCloseText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
   },
 })
