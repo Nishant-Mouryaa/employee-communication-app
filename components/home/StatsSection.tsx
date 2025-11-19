@@ -18,25 +18,27 @@ export const StatsSection: React.FC<StatsSectionProps> = ({
 }) => {
   return (
     <View style={styles.statsContainer}>
-      <StatCard
-        icon="💬"
-        iconBgColor="#eef2ff"
-        borderColor="#6366f1"
-        count={unreadMessages}
-        label="Unread Messages"
-        actionText="View chats →"
-        onPress={onMessagesPress}
-      />
+      <View style={styles.statCardWrapper}>
+        <StatCard
+          icon="💬"
+          iconBgColor="#eef2ff"
+          count={unreadMessages}
+          label="Unread Messages"
+          actionText="View chats →"
+          onPress={onMessagesPress}
+        />
+      </View>
       
-      <StatCard
-        icon="✓"
-        iconBgColor="#fef3c7"
-        borderColor="#f59e0b"
-        count={pendingTasks}
-        label="Pending Tasks"
-        actionText="View tasks →"
-        onPress={onTasksPress}
-      />
+      <View style={styles.statCardWrapper}>
+        <StatCard
+          icon="✓"
+          iconBgColor="#fef3c7"
+          count={pendingTasks}
+          label="Pending Tasks"
+          actionText="View tasks →"
+          onPress={onTasksPress}
+        />
+      </View>
     </View>
   )
 }
@@ -47,5 +49,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 12,
     gap: 12,
+  },
+  statCardWrapper: {
+    flex: 1,
+    borderRadius: 16, // Match the card's border radius
+    overflow: 'hidden', // This contains the shadow properly
   },
 })

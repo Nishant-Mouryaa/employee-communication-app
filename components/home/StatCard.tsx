@@ -1,11 +1,13 @@
 // components/home/StatCard.tsx
 import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { Platform } from 'react-native'
+
 
 interface StatCardProps {
   icon: string
   iconBgColor: string
-  borderColor: string
+
   count: number
   label: string
   actionText: string
@@ -15,7 +17,7 @@ interface StatCardProps {
 export const StatCard: React.FC<StatCardProps> = ({
   icon,
   iconBgColor,
-  borderColor,
+
   count,
   label,
   actionText,
@@ -23,7 +25,7 @@ export const StatCard: React.FC<StatCardProps> = ({
 }) => {
   return (
     <TouchableOpacity 
-      style={[styles.statCard, { borderTopColor: borderColor }]}
+      style={[styles.statCard, ]}
       onPress={onPress}
       activeOpacity={0.7}
     >
@@ -52,13 +54,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 16,
     padding: 20,
-    borderTopWidth: 3,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowRadius: 8,
+    shadowColor: '#000',
+    elevation: 3,
+    // Add these to fix the shadow issue:
+    margin: 0.5, // Small margin to prevent shadow clipping
   },
+    
   statHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
