@@ -8,9 +8,13 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 interface HomeHeaderProps {
   userEmail?: string
+  onProfilePress?: () => void
 }
 
-export const HomeHeader: React.FC<HomeHeaderProps> = ({ userEmail }) => {
+export const HomeHeader: React.FC<HomeHeaderProps> = ({ 
+  userEmail, 
+  onProfilePress 
+}) => {
   const handleSignOut = () => {
     Alert.alert(
       'Sign Out',
@@ -36,13 +40,24 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({ userEmail }) => {
               {userEmail ? `Welcome, ${userEmail.split('@')[0]}!` : 'Welcome!'}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.signOutButton}
-            onPress={handleSignOut}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="log-out-outline" size={22} color="#6366F1" />
-          </TouchableOpacity>
+          
+          <View style={styles.buttonsContainer}>
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={onProfilePress}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="person-outline" size={22} color="#ffffff" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={handleSignOut}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="log-out-outline" size={22} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -51,7 +66,9 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({ userEmail }) => {
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: 'white',
+    backgroundColor: '#6366F1',
+    borderBottomEndRadius: 20,
+    borderBottomStartRadius: 20,
   },
   container: {
     flexDirection: 'row',
@@ -59,10 +76,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    height: 56,
+    backgroundColor: '#6366F1',
+    height: 50 + (IS_MOBILE ? 20 : 0),
+    
   },
   headerContent: {
     flexDirection: 'row',
@@ -72,28 +88,42 @@ const styles = StyleSheet.create({
   },
   textContainer: {
     flex: 1,
-    marginRight: 12,
   },
-  title: {
-    fontSize: IS_MOBILE ? 20 : 24,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 2,
-    letterSpacing: -0.5,
+  buttonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  subtitle: {
-    fontSize: IS_MOBILE ? 13 : 15,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  signOutButton: {
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+  profileButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     width: 40,
     height: 40,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  signOutButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  title: {
+    fontSize: IS_MOBILE ? 24: 24,
+    fontWeight: '800',
+    color: '#ffffff',
+    marginBottom: 0,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: IS_MOBILE ? 15 : 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
   },
 })

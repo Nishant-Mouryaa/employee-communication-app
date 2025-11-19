@@ -59,8 +59,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowColor: '#000',
     elevation: 3,
-    // Add these to fix the shadow issue:
-    margin: 0.5, // Small margin to prevent shadow clipping
+    margin: 1, // Small margin to prevent shadow clipping
   },
     
   statHeader: {

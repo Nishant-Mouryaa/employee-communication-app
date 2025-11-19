@@ -4,7 +4,6 @@ import {
   StyleSheet, 
   ScrollView, 
   RefreshControl,
-  SafeAreaView,
   Animated
 } from 'react-native'
 import { useAuth } from '../hooks/useAuth'
@@ -14,8 +13,9 @@ import { useRealtimeSubscriptions } from '../hooks/useRealtimeSubscriptions'
 import { HomeHeader } from '../components/home/HomeHeader'
 import { StatsSection } from '../components/home/StatsSection'
 import { QuickActionsSection } from '../components/home/QuickActionsSection'
-import { RecentActivitySection } from '../components/home/RecentActivitySection'
 import { QuickAction } from '../types/home'
+import { SafeAreaView } from 'react-native-safe-area-context'
+
 
 export default function HomeScreen() {
   const { user } = useAuth()
@@ -34,26 +34,18 @@ export default function HomeScreen() {
   // Handle realtime message changes
   const handleMessageChange = useCallback(() => {
     updateUnreadCount()
-    updateActivities()
-  }, [updateUnreadCount, updateActivities])
+  }, [updateUnreadCount])
 
   // Handle realtime task changes
   const handleTaskChange = useCallback(() => {
     updatePendingTasks()
-    updateActivities()
-  }, [updatePendingTasks, updateActivities])
-
-  // Handle realtime announcement changes
-  const handleAnnouncementChange = useCallback(() => {
-    updateActivities()
-  }, [updateActivities])
+  }, [updatePendingTasks])
 
   // Setup realtime subscriptions
   useRealtimeSubscriptions({
     userId: user?.id,
     onMessageChange: handleMessageChange,
     onTaskChange: handleTaskChange,
-    onAnnouncementChange: handleAnnouncementChange
   })
 
   // Initial data fetch and fade in animation
@@ -93,9 +85,16 @@ export default function HomeScreen() {
     navigation.navigate('Tasks' as never)
   }, [navigation])
 
+  const navigateToProfile = useCallback(() => {
+    navigation.navigate('Profile' as never)
+  }, [navigation])
+
   return (
     <SafeAreaView style={styles.container}>
-      <HomeHeader userEmail={user?.email} />
+      <HomeHeader 
+        userEmail={user?.email} 
+        onProfilePress={navigateToProfile}
+      />
 
       <ScrollView 
         style={styles.scrollView}
@@ -123,8 +122,6 @@ export default function HomeScreen() {
             onPostAnnouncement={() => handleQuickAction('postAnnouncement')}
             onOpenCalendar={() => handleQuickAction('calendar')}
           />
-
-          <RecentActivitySection activities={stats.recentActivities} />
         </Animated.View>
       </ScrollView>
     </SafeAreaView>
@@ -132,19 +129,19 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-container: {
+  container: {
     flex: 1,
-    backgroundColor: 'white', // Changed from #f8f9fa to white to match header
+    backgroundColor: 'white',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-      paddingTop: 8,
+    paddingTop: 8,
     paddingBottom: 24,
   },
   content: {
     flex: 1,
-     paddingHorizontal: 0,
+    paddingHorizontal: 0,
   },
 })

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import initI18n from './localization/i18n'
+import { HomeStackNavigator } from './navigators/HomeStackNavigator'
 
 // Import our hooks and components
 import { useAuth, AuthProvider } from './hooks/useAuth'
@@ -107,8 +108,6 @@ function AppContent() {
                   iconName = focused ? 'checkmark-circle' : 'checkmark-circle-outline'
                 } else if (route.name === 'Announcements') {
                   iconName = focused ? 'megaphone' : 'megaphone-outline'
-                } else if (route.name === 'Profile') {
-                  iconName = focused ? 'person-circle' : 'person-circle-outline'
                 } else if (route.name === 'Admin') {
                   iconName = focused ? 'shield' : 'shield-outline'
                 }
@@ -132,7 +131,8 @@ function AppContent() {
           >
             <Tab.Screen 
               name="Home" 
-              component={HomeScreen}
+             
+               component={HomeStackNavigator}
               options={{
                 tabBarLabel: 'Home',
               }}
@@ -156,13 +156,6 @@ function AppContent() {
               component={AnnouncementsScreen}
               options={{
                 tabBarLabel: 'News',
-              }}
-            />
-            <Tab.Screen 
-              name="Profile" 
-              component={ProfileScreen}
-              options={{
-                tabBarLabel: 'Profile',
               }}
             />
             {isUserAdmin && (
