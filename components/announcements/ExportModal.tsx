@@ -78,21 +78,40 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
         case 'pdf':
           result = await exportService.exportToPDF(options)
           break
+        case 'excel':
+          result = await exportService.exportToExcel(options)
+          break
         default:
           throw new Error('Format not supported yet')
       }
 
       Alert.alert(
         t('common.success'),
-        'Export completed successfully!',
+        `Export completed successfully! ${result.message || ''}`,
         [{ text: 'OK', onPress: onClose }]
       )
     } catch (error: any) {
-      Alert.alert(t('common.error'), error.message || 'Failed to export data')
+      console.error('Export error:', error)
+      
+      let errorMessage = 'Failed to export data. Please try again.'
+      
+      if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+        errorMessage = 'Database configuration error. Please contact support.'
+      } else if (error.message?.includes('UTF8')) {
+        errorMessage = 'Export service configuration error.'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      Alert.alert(t('common.error'), errorMessage)
     } finally {
       setExporting(false)
     }
   }
+
+  const renderFormattedText = (content: string, style: any = {}) => (
+    <Text style={style}>{content}</Text>
+  )
 
   return (
     <Modal
@@ -105,7 +124,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
         <View style={styles.header}>
           <Text style={styles.title}>{t('export.title')}</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>✕</Text>
+            {renderFormattedText('✕', styles.closeButtonText)}
           </TouchableOpacity>
         </View>
 
@@ -123,13 +142,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
                   ]}
                   onPress={() => updateOption('format', format.type)}
                 >
-                  <Text style={styles.formatIcon}>{format.icon}</Text>
-                  <Text style={[
+                  {renderFormattedText(format.icon, styles.formatIcon)}
+                  {renderFormattedText(format.label, [
                     styles.formatLabel,
                     options.format === format.type && styles.formatLabelActive
-                  ]}>
-                    {format.label}
-                  </Text>
+                  ])}
                 </TouchableOpacity>
               ))}
             </View>
@@ -223,36 +240,36 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
           </View>
 
           {/* Category Filter */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('export.selectCategories')}</Text>
-            <Text style={styles.sectionSubtitle}>
-              Leave empty to export all categories
-            </Text>
-            
-            <View style={styles.categoryList}>
-              {categories.map((category) => (
-                <TouchableOpacity
-                  key={category.id}
-                  style={[
-                    styles.categoryItem,
-                    options.categories?.includes(category.id) && styles.categoryItemActive
-                  ]}
-                  onPress={() => toggleCategory(category.id)}
-                >
-                  <Text style={styles.categoryIcon}>{category.icon}</Text>
-                  <Text style={[
-                    styles.categoryName,
-                    options.categories?.includes(category.id) && styles.categoryNameActive
-                  ]}>
-                    {category.name}
-                  </Text>
-                  {options.categories?.includes(category.id) && (
-                    <Text style={styles.categoryCheck}>✓</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
+          {categories.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('export.selectCategories')}</Text>
+              <Text style={styles.sectionSubtitle}>
+                Leave empty to export all categories
+              </Text>
+              
+              <View style={styles.categoryList}>
+                {categories.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.categoryItem,
+                      options.categories?.includes(category.id) && styles.categoryItemActive
+                    ]}
+                    onPress={() => toggleCategory(category.id)}
+                  >
+                    {renderFormattedText(category.icon, styles.categoryIcon)}
+                    {renderFormattedText(category.name, [
+                      styles.categoryName,
+                      options.categories?.includes(category.id) && styles.categoryNameActive
+                    ])}
+                    {options.categories?.includes(category.id) && (
+                      <Text style={styles.categoryCheck}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
         </ScrollView>
 
         <View style={styles.footer}>
@@ -273,7 +290,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
               <ActivityIndicator size="small" color="white" />
             ) : (
               <Text style={styles.exportButtonText}>{t('export.exportButton')}</Text>
-            )}          </TouchableOpacity>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>

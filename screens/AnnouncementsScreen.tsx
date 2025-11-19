@@ -214,41 +214,12 @@ export default function AnnouncementsScreen() {
     </View>
   )
 
-  // Action Menu Component
-  const renderActionMenu = () => (
-    <View style={styles.actionMenu}>
-      <TouchableOpacity
-        style={styles.actionMenuItem}
-        onPress={() => setAnalyticsVisible(true)}
-      >
-        <Text style={styles.actionMenuIcon}>📊</Text>
-        <Text style={styles.actionMenuText}>{t('analytics.title')}</Text>
-      </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.actionMenuItem}
-        onPress={() => setExportVisible(true)}
-      >
-        <Text style={styles.actionMenuIcon}>📥</Text>
-        <Text style={styles.actionMenuText}>{t('export.title')}</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.actionMenuItem}
-        onPress={() => setLanguageVisible(true)}
-      >
-        <Text style={styles.actionMenuIcon}>🌐</Text>
-        <Text style={styles.actionMenuText}>{t('settings.language')}</Text>
-      </TouchableOpacity>
-    </View>
-  )
 
   return (
     <View style={styles.container}>
       <AnnouncementHeader />
 
-      {/* Action Menu */}
-      {renderActionMenu()}
 
       {/* Search and Filter Section */}
       <View style={styles.searchContainer}>
@@ -497,15 +468,7 @@ export default function AnnouncementsScreen() {
         onRestore={fetchAnnouncements}
       />
 
-      <ExportModal
-        visible={isExportVisible}
-        onClose={() => setExportVisible(false)}
-      />
-
-      <LanguageModal
-        visible={isLanguageVisible}
-        onClose={() => setLanguageVisible(false)}
-      />
+ 
     </View>
   )
 }
