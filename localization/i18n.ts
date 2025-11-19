@@ -25,18 +25,34 @@ const resources = {
   ar: { translation: ar }
 }
 
+type SupportedLanguage = {
+  code: string
+  name: string
+  nativeName: string
+  flag: string
+}
+
 const initI18n = async () => {
-  let savedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY)
+  let savedLanguage: string | null = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY)
   
   if (!savedLanguage) {
-    savedLanguage = Localization.locale.split('-')[0]
+    // expo-localization may expose different properties depending on version.
+    // Use a safe fallback path and cast to any to avoid type errors.
+    const deviceLocale =
+      (Localization as any).locale ??
+      (Localization as any).locales?.[0]?.languageTag ??
+      'en'
+    savedLanguage = deviceLocale.split('-')[0]
   }
 
-  i18n
+  // Ensure we pass string | undefined to i18n.init to satisfy types
+  const lng: string | undefined = savedLanguage ?? undefined
+
+  await i18n
     .use(initReactI18next)
     .init({
       resources,
-      lng: savedLanguage,
+      lng,
       fallbackLng: 'en',
       interpolation: {
         escapeValue: false
