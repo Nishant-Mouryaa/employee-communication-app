@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 export default function HomeScreen() {
   const { user } = useAuth()
-  const navigation = useNavigation()
+  const navigation = useNavigation<any>()
   const fadeAnim = useRef(new Animated.Value(0)).current
   
   const {
@@ -41,11 +41,17 @@ export default function HomeScreen() {
     updatePendingTasks()
   }, [updatePendingTasks])
 
+  // Handle realtime announcement changes
+  const handleAnnouncementChange = useCallback(() => {
+    updateActivities()
+  }, [updateActivities])
+
   // Setup realtime subscriptions
   useRealtimeSubscriptions({
     userId: user?.id,
     onMessageChange: handleMessageChange,
     onTaskChange: handleTaskChange,
+    onAnnouncementChange: handleAnnouncementChange,
   })
 
   // Initial data fetch and fade in animation

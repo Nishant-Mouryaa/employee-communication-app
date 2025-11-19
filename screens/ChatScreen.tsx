@@ -40,6 +40,7 @@ import {
 import { starMessage, unstarMessage, isMessageStarred } from '../services/messageBookmarkService'
 import { pinMessage, unpinMessage, getPinnedMessage } from '../services/messagePinService'
 import { TouchableOpacity, Text } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 
 export default function ChatScreen() {
   const { user } = useAuth()
@@ -52,7 +53,7 @@ export default function ChatScreen() {
   const [channelMembersList, setChannelMembersList] = useState<ChannelMember[]>([])
   const [editingMessage, setEditingMessage] = useState<Message | null>(null)
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
-  const [showConversationList, setShowConversationList] = useState(true) // New state for WhatsApp-like navigation
+  const [showConversationList, setShowConversationList] = useState(true)
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
   const [uploadingAttachments, setUploadingAttachments] = useState(false)
   const [showSearchModal, setShowSearchModal] = useState(false)
@@ -63,7 +64,7 @@ export default function ChatScreen() {
   const [showMeetingModal, setShowMeetingModal] = useState(false)
   const [messageForMeeting, setMessageForMeeting] = useState<Message | null>(null)
 
-  const handleReply = useCallback((message: Message) => {
+const handleReply = useCallback((message: Message) => {
     setReplyingTo(message)
   }, [])
 
@@ -480,6 +481,7 @@ export default function ChatScreen() {
     selectChannel(null)
   }, [selectChannel])
 
+
   // Loading state - this is a conditional return, which is allowed
   if (!hasUserChecked || loading) {
     return (
@@ -512,14 +514,24 @@ export default function ChatScreen() {
           {showConversationList ? (
             // Conversation List View (WhatsApp home screen)
             <View style={styles.conversationListContainer}>
+              {/* Updated Header to match HomeScreen */}
               <View style={styles.conversationHeader}>
-                <Text style={styles.conversationHeaderTitle}>Chats</Text>
-                <TouchableOpacity 
-                  style={styles.newChatButton}
-                  onPress={() => setShowChannelModal(true)}
-                >
-                  <Text style={styles.newChatButtonText}>+</Text>
-                </TouchableOpacity>
+                <View style={styles.headerContent}>
+                  <View style={styles.textContainer}>
+                    <Text style={styles.title}>Chats</Text>
+                    <Text style={styles.subtitle}>
+                      {user?.email ? `Welcome, ${user.email.split('@')[0]}!` : 'Your conversations'}
+                    </Text>
+                  </View>
+                  
+                  <TouchableOpacity
+                    style={styles.newChatButton}
+                    onPress={() => setShowChannelModal(true)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="add-outline" size={24} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
               </View>
               
               <ChannelList
@@ -538,14 +550,14 @@ export default function ChatScreen() {
                   ? selectedChannel.dm_user.full_name || selectedChannel.dm_user.username
                   : selectedChannel?.name}
                 unreadCount={getTotalUnreadCount()}
-                onChannelPress={handleBackToConversations} // Back to conversation list
+                onChannelPress={handleBackToConversations}
                 onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
                 onSearchPress={handleSearchPress}
                 memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
                 isDM={selectedChannel?.type === 'direct'}
                 dmUser={selectedChannel?.dm_user}
-                showBackButton={true} // Add this
-                onBackPress={handleBackToConversations} // Add this
+                showBackButton={true}
+                onBackPress={handleBackToConversations}
               />
 
               {showMembersList ? (
@@ -678,15 +690,26 @@ export default function ChatScreen() {
       <View style={styles.content}>
         {/* Conversation List Sidebar */}
         <View style={styles.conversationSidebar}>
+          {/* Updated Header to match HomeScreen */}
           <View style={styles.sidebarHeader}>
-            <Text style={styles.sidebarTitle}>Chats</Text>
-            <TouchableOpacity 
-              style={styles.newChatButton}
-              onPress={() => setShowChannelModal(true)}
-            >
-              <Text style={styles.newChatButtonText}>+</Text>
-            </TouchableOpacity>
+            <View style={styles.headerContent}>
+              <View style={styles.textContainer}>
+                <Text style={styles.title}>Chats</Text>
+                <Text style={styles.subtitle}>
+                  {user?.email ? `Welcome, ${user.email.split('@')[0]}!` : 'Your conversations'}
+                </Text>
+              </View>
+              
+              <TouchableOpacity
+                style={styles.newChatButton}
+                onPress={() => setShowChannelModal(true)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="add-outline" size={24} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
           </View>
+          
           <ChannelList
             channels={channels}
             selectedChannelId={selectedChannel?.id}
@@ -700,16 +723,16 @@ export default function ChatScreen() {
         <View style={styles.chatArea}>
           {selectedChannel ? (
             <>
-          <ChatAreaHeader   
-            channelName={selectedChannel.name}
-            onBack={handleBackToConversations}
-            showBackButton={true}
-            onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
-            onSearchPress={handleSearchPress}
-            memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
-            isDM={selectedChannel?.type === 'direct'}
-            dmUser={selectedChannel?.dm_user}
-          />
+              <ChatAreaHeader   
+                channelName={selectedChannel.name}
+                onBack={handleBackToConversations}
+                showBackButton={true}
+                onMembersPress={selectedChannel?.type !== 'direct' ? handleMembersPress : undefined}
+                onSearchPress={handleSearchPress}
+                memberCount={selectedChannel?.type !== 'direct' ? channelMembersList.length : 0}
+                isDM={selectedChannel?.type === 'direct'}
+                dmUser={selectedChannel?.dm_user}
+              />
 
               <MessageList
                 messages={messages}
@@ -843,53 +866,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   conversationHeader: {
+    backgroundColor: '#6366F1',
+    borderBottomEndRadius: 16,
+    borderBottomStartRadius: 16,
+    paddingBottom: 12,
+  },
+  sidebarHeader: {
+    backgroundColor: '#6366F1',
+    borderBottomEndRadius: 16,
+    borderBottomStartRadius: 16,
+    paddingBottom: 12,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
   },
-  conversationHeaderTitle: {
+  textContainer: {
+    flex: 1,
+  },
+  title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#ffffff',
+    marginBottom: 2,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+  },
+  newChatButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   conversationSidebar: {
     width: 350,
     backgroundColor: '#ffffff',
     borderRightWidth: 1,
     borderRightColor: '#e2e8f0',
-  },
-  sidebarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  sidebarTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1e293b',
-  },
-  newChatButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#6366F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  newChatButtonText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: '600',
   },
   chatArea: {
     flex: 1,
