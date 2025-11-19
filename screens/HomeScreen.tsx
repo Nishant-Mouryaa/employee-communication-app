@@ -132,17 +132,19 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'white', // Changed from #f8f9fa to white to match header
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
+      paddingTop: 8,
     paddingBottom: 24,
   },
   content: {
     flex: 1,
+     paddingHorizontal: 0,
   },
 })
