@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import { supabase } from '../../lib/supabase'
 import { IS_MOBILE } from '../../constants/home'
 import { Ionicons } from '@expo/vector-icons'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 interface HomeHeaderProps {
   userEmail?: string
@@ -26,27 +27,32 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({ userEmail }) => {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.headerContent}>
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>Smart Workplace</Text>
-          <Text style={styles.subtitle}>
-            {userEmail ? `Welcome, ${userEmail.split('@')[0]}!` : 'Welcome!'}
-          </Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.headerContent}>
+          <View style={styles.textContainer}>
+            <Text style={styles.title}>Smart Workplace</Text>
+            <Text style={styles.subtitle}>
+              {userEmail ? `Welcome, ${userEmail.split('@')[0]}!` : 'Welcome!'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.signOutButton}
+            onPress={handleSignOut}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="log-out-outline" size={22} color="#6366F1" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={handleSignOut}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="log-out-outline" size={22} color="#6366F1" />
-        </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    backgroundColor: 'white',
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -57,7 +63,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
     height: 56,
-    marginTop: 16,
   },
   headerContent: {
     flexDirection: 'row',
