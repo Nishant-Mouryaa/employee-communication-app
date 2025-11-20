@@ -218,7 +218,10 @@ export default function AnnouncementsScreen() {
 
   return (
     <View style={styles.container}>
-      <AnnouncementHeader />
+     <AnnouncementHeader 
+  onAddAnnouncementPress={() => setModalVisible(true)}
+  showCreateButton={userRole.canPost}
+/>
 
 
       {/* Search and Filter Section */}
@@ -322,30 +325,7 @@ export default function AnnouncementsScreen() {
         </View>
       </View>
 
-      {/* Create Button */}
-      {userRole.canPost && (
-        <View style={styles.createButtonContainer}>
-          <TouchableOpacity 
-            style={styles.createButton}
-            onPress={() => setModalVisible(true)}
-            disabled={loading || submitting}
-          >
-            <View style={styles.createButtonIcon}>
-              <Text style={styles.createButtonIconText}>+</Text>
-            </View>
-            <Text style={styles.createButtonText}>{t('announcements.create')}</Text>
-          </TouchableOpacity>
 
-          {userRole.canSchedule && (
-            <TouchableOpacity
-              style={styles.scheduleIconButton}
-              onPress={() => setScheduleModalVisible(true)}
-            >
-              <Text style={styles.scheduleIconText}>📅</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
 
       {/* Announcements List */}
       {loading && announcements.length === 0 ? (
