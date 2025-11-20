@@ -2,33 +2,51 @@
 import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { CompactSearch } from './CompactSearch'
+import { SearchFilters, Category } from '../../types/announcement'
 
 interface AnnouncementHeaderProps {
   onAddAnnouncementPress: () => void;
+  onFiltersChange: (filters: Partial<SearchFilters>) => void;
+  categories: Category[];
+  currentFilters: SearchFilters;
   showCreateButton?: boolean;
 }
 
 export const AnnouncementHeader: React.FC<AnnouncementHeaderProps> = ({ 
   onAddAnnouncementPress, 
+  onFiltersChange,
+  categories,
+  currentFilters,
   showCreateButton = true 
 }) => {
   return (
     <View style={styles.header}>
       <View style={styles.headerBackground} />
       <View style={styles.headerContent}>
-        <Text style={styles.title}>Announcements</Text>
-        <Text style={styles.subtitle}>Stay updated with company news</Text>
-       <View style={{ position: 'absolute', right: 24, top: 60 }}>
-        {showCreateButton && (
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={onAddAnnouncementPress}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="add-outline" size={24} color="#ffffff" />
-          </TouchableOpacity>
+        <View style={styles.topRow}>
+          <View style={styles.titleSection}>
+            <Text style={styles.title}>Announcements</Text>
+            <Text style={styles.subtitle}>Stay updated with company news</Text>
+          </View>
           
-        )}
+          <View style={styles.actions}>
+            <CompactSearch 
+              onFiltersChange={onFiltersChange}
+              categories={categories}
+              currentFilters={currentFilters}
+            />
+            
+            {showCreateButton && (
+              <TouchableOpacity 
+                style={styles.addButton}
+                onPress={onAddAnnouncementPress}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add-outline" size={24} color="#ffffff" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     </View>
@@ -48,6 +66,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  titleSection: {
+    flex: 1,
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -56,22 +82,24 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: '#333',
-    marginBottom: 16,
+    color: '#666',
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   addButton: {
-backgroundColor: '#333',
-      width: 40,
-    height: 40,
-    borderRadius: 20,
+    backgroundColor: '#333',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.2)',
-  },
-  addButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
 })

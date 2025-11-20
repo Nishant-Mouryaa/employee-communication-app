@@ -218,112 +218,20 @@ export default function AnnouncementsScreen() {
 
   return (
     <View style={styles.container}>
-     <AnnouncementHeader 
+<AnnouncementHeader 
   onAddAnnouncementPress={() => setModalVisible(true)}
+  onFiltersChange={(newFilters) => {
+    Object.entries(newFilters).forEach(([key, value]) => {
+      updateFilter(key as any, value)
+    })
+  }}
+  categories={categories}
+  currentFilters={filters}
   showCreateButton={userRole.canPost}
 />
 
 
-      {/* Search and Filter Section */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchRow}>
-          <View style={styles.searchInputWrapper}>
-            <SearchBar
-              searchQuery={filters.query}
-              onSearchChange={(text) => updateFilter('query', text)}
-              onClear={() => updateFilter('query', '')}
-            />
-          </View>
-          
-          <TouchableOpacity
-            style={styles.advancedSearchButton}
-            onPress={() => setAdvancedSearchVisible(true)}
-          >
-            <Text style={styles.advancedSearchIcon}>⚙️</Text>
-          </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.notificationButton}
-            onPress={() => setNotificationSettingsVisible(true)}
-          >
-            <Text style={styles.notificationIcon}>🔔</Text>
-          </TouchableOpacity>
-        </View>
-        
-        <CategoryFilter
-          categories={categories}
-          selectedCategory={filters.category}
-          onSelectCategory={(categoryId) => updateFilter('category', categoryId)}
-        />
-
-        <View style={styles.filterSection}>
-          <View style={styles.filterChips}>
-            <TouchableOpacity
-              style={[styles.filterChip, filters.isImportant && styles.filterChipActive]}
-              onPress={() => updateFilter('isImportant', filters.isImportant ? undefined : true)}
-            >
-              <Text style={[styles.filterChipIcon, filters.isImportant && styles.filterChipIconActive]}>
-                ⭐
-              </Text>
-              <Text style={[styles.filterChipText, filters.isImportant && styles.filterChipTextActive]}>
-                {t('announcements.important')}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.filterChip, filters.status !== 'all' && styles.filterChipActive]}
-              onPress={() => {
-                const statuses = ['all', 'active', 'scheduled', 'expired']
-                const currentIndex = statuses.indexOf(filters.status)
-                const nextStatus = statuses[(currentIndex + 1) % statuses.length]
-                updateFilter('status', nextStatus as any)
-              }}
-            >
-              <Text style={[styles.filterChipText, filters.status !== 'all' && styles.filterChipTextActive]}>
-                {filters.status === 'all' ? 'All' : 
-                 filters.status === 'active' ? '✅ Active' :
-                 filters.status === 'scheduled' ? '📅 Scheduled' :
-                 '⏰ Expired'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.resultsInfo}>
-                    <Text style={styles.resultCount}>
-              {filteredAnnouncements.length} {filteredAnnouncements.length === 1 ? 'result' : 'results'}
-            </Text>
-            {hasActiveFilters && (
-              <TouchableOpacity style={styles.clearAllButton} onPress={clearFilters}>
-                <Text style={styles.clearAllText}>Clear all</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* Sort Options */}
-        <View style={styles.sortSection}>
-          <Text style={styles.sortLabel}>Sort by:</Text>
-          <View style={styles.sortButtons}>
-            {[
-              { key: 'date', label: 'Date', icon: '📅' },
-              { key: 'relevance', label: 'Relevance', icon: '🎯' },
-              { key: 'reactions', label: 'Reactions', icon: '❤️' },
-              { key: 'comments', label: 'Comments', icon: '💬' }
-            ].map((sort) => (
-              <TouchableOpacity
-                key={sort.key}
-                style={[
-                  styles.sortButton,
-                  filters.sortBy === sort.key && styles.sortButtonActive
-                ]}
-                onPress={() => updateFilter('sortBy', sort.key as any)}
-              >
-                <Text style={styles.sortButtonIcon}>{sort.icon}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </View>
 
 
 
@@ -456,7 +364,7 @@ export default function AnnouncementsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#ffffff',
   },
   actionMenu: {
     flexDirection: 'row',
