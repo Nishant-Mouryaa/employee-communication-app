@@ -527,7 +527,7 @@ const handleReply = useCallback((message: Message) => {
                     onPress={() => setShowChannelModal(true)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="add-outline" size={24} color="#333" />
+                    <Ionicons name="add-outline" size={24} color="#ffffff" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -898,8 +898,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   newChatButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    width: 40,
+  backgroundColor: '#333',
+      width: 40,
     height: 40,
     borderRadius: 20,
     justifyContent: 'center',

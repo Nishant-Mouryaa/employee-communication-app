@@ -66,9 +66,8 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: '#6366F1',
-    borderBottomEndRadius: 20,
-    borderBottomStartRadius: 20,
+   
+
   },
   container: {
     flexDirection: 'row',
@@ -76,7 +75,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#6366F1',
+   
     height: 50 + (IS_MOBILE ? 20 : 0),
     
   },
@@ -85,6 +84,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
+    
   },
   textContainer: {
     flex: 1,
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   profileButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      backgroundColor: '#333',
     width: 40,
     height: 40,
     borderRadius: 12,
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   signOutButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#333',
     width: 40,
     height: 40,
     borderRadius: 12,
@@ -117,13 +117,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: IS_MOBILE ? 24: 24,
     fontWeight: '800',
-    color: '#ffffff',
+    color: '#333',
     marginBottom: 0,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: IS_MOBILE ? 15 : 15,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: '#333',
     fontWeight: '500',
   },
 })
