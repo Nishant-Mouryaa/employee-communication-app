@@ -1,6 +1,7 @@
 // components/announcements/AnnouncementCard.tsx
 import React from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { Announcement, UserRole } from '../../types/announcement'
 import { AttachmentList } from './AttachmentList'
 import { CardBadges } from './CardBadges'
@@ -27,90 +28,144 @@ export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
   onDelete
 }) => {
   const canEdit = userRole.canEditAll || userId === announcement.author_id
+  
+  // Fix: Handle is_read properly - it might be undefined for new announcements
+  // Only show as unread if is_read is explicitly false
+  const isUnread = announcement.is_read === false
+  
+  // Safe data access with fallbacks
+  const authorName = announcement.author || 'Unknown Author'
+  const postDate = announcement.date || announcement.created_at || 'Unknown date'
+  const title = announcement.title || 'No title'
+  const content = announcement.content || 'No content'
+  const reactionCount = announcement.reaction_count || 0
+  const readCount = announcement.read_count || 0
+  const commentCount = announcement.comment_count || 0
+  const userHasReacted = announcement.user_has_reacted || false
+  const isPinned = announcement.isPinned || false
+  const isImportant = announcement.isImportant || false
 
   return (
     <TouchableOpacity
       style={[
         styles.card,
-        announcement.isPinned && styles.pinnedCard,
-        announcement.isImportant && styles.importantCard,
-        !announcement.is_read && styles.unreadCard
+        isUnread && styles.unreadCard
       ]}
       onPress={onPress}
       activeOpacity={0.7}
     >
+      {/* Unread Indicator */}
+      {isUnread && <View style={styles.unreadIndicator} />}
+
       {/* Card Header */}
       <View style={styles.cardHeader}>
         <View style={styles.authorSection}>
-          <View style={styles.avatarPlaceholder}>
+          <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {announcement.author.charAt(0).toUpperCase()}
+              {authorName.charAt(0).toUpperCase()}
             </Text>
           </View>
-          <View>
-            <Text style={styles.authorName}>{announcement.author}</Text>
-            <Text style={styles.postDate}>{announcement.date}</Text>
+          <View style={styles.authorInfo}>
+            <Text style={styles.authorName} numberOfLines={1}>
+              {authorName}
+            </Text>
+            <Text style={styles.postDate}>
+              {postDate}
+            </Text>
           </View>
         </View>
         
-        <CardBadges announcement={announcement} />
+        <View style={styles.headerRight}>
+          <CardBadges 
+            announcement={{
+              ...announcement,
+              isImportant,
+              category: announcement.category
+            }} 
+          />
+          {isPinned && (
+            <Ionicons name="pin" size={16} color="#6B7280" />
+          )}
+        </View>
       </View>
 
       {/* Card Content */}
-      <Text style={styles.title}>{announcement.title}</Text>
-      <Text style={styles.content}>{announcement.content}</Text>
+      <View style={styles.contentSection}>
+        <Text style={styles.title} numberOfLines={2}>
+          {title}
+        </Text>
+        <Text style={styles.content} numberOfLines={3}>
+          {content}
+        </Text>
+      </View>
 
       {/* Attachments */}
       {announcement.attachments && announcement.attachments.length > 0 && (
-        <AttachmentList attachments={announcement.attachments} />
+        <View style={styles.attachmentsSection}>
+          <AttachmentList attachments={announcement.attachments} />
+        </View>
       )}
 
       {/* Card Footer */}
       <View style={styles.cardFooter}>
-        <View style={styles.footerLeft}>
-          <TouchableOpacity
-            style={styles.reactionButton}
+        <View style={styles.statsSection}>
+          <TouchableOpacity 
+            style={styles.statItem}
             onPress={onReaction}
           >
+            <Ionicons 
+              name={userHasReacted ? "heart" : "heart-outline"} 
+              size={16} 
+              color={userHasReacted ? "#DC2626" : "#6B7280"} 
+            />
             <Text style={[
-              styles.reactionIcon,
-                            announcement.user_has_reacted && styles.reactionIconActive
+              styles.statText,
+              userHasReacted && styles.statTextActive
             ]}>
-              {announcement.user_has_reacted ? '❤️' : '🤍'}
+              {reactionCount}
             </Text>
-            <Text style={styles.reactionCount}>{announcement.reaction_count}</Text>
           </TouchableOpacity>
 
-          <View style={styles.readStats}>
-            <Text style={styles.readStatsText}>👁️ {announcement.read_count || 0}</Text>
+          <View style={styles.statItem}>
+            <Ionicons name="eye-outline" size={16} color="#6B7280" />
+            <Text style={styles.statText}>{readCount}</Text>
           </View>
+
+          {commentCount > 0 && (
+            <View style={styles.statItem}>
+              <Ionicons name="chatbubble-outline" size={16} color="#6B7280" />
+              <Text style={styles.statText}>{commentCount}</Text>
+            </View>
+          )}
         </View>
 
         {canEdit && (
           <View style={styles.actionButtons}>
             {userRole.canPin && (
               <TouchableOpacity
-                style={[styles.actionButton, styles.pinAction]}
+                style={styles.actionButton}
                 onPress={onPin}
               >
-                <Text style={styles.actionButtonText}>
-                  {announcement.isPinned ? 'Unpin' : 'Pin'}
-                </Text>
+                <Ionicons 
+                  name={isPinned ? "pin" : "pin-outline"} 
+                  size={18} 
+                  color="#6B7280" 
+                />
               </TouchableOpacity>
             )}
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.editAction]}
+              style={styles.actionButton}
               onPress={onEdit}
             >
-              <Text style={styles.actionButtonText}>Edit</Text>
+              <Ionicons name="create-outline" size={18} color="#6B7280" />
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.deleteAction]}
+              style={styles.actionButton}
               onPress={onDelete}
             >
-              <Text style={styles.actionButtonText}>Delete</Text>
+              <Ionicons name="trash-outline" size={18} color="#DC2626" />
             </TouchableOpacity>
           </View>
         )}
@@ -121,148 +176,141 @@ export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginBottom: 12,
+    marginHorizontal: 16,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#F3F4F6',
+    position: 'relative',
+    overflow: 'hidden',
+    minHeight: 140,
   },
   unreadCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
   },
-  pinnedCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#FFD700',
-    backgroundColor: '#FFFEF7',
-  },
-  importantCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF3B30',
+  unreadIndicator: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: '#007AFF',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 12,
+    minHeight: 40,
   },
   authorSection: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 8,
   },
-  avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#374151',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   avatarText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  authorInfo: {
+    flex: 1,
   },
   authorName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1e293b',
+    color: '#111827',
     marginBottom: 2,
   },
   postDate: {
     fontSize: 12,
-    color: '#64748b',
+    color: '#6B7280',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  contentSection: {
+    marginBottom: 12,
+    minHeight: 60,
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 8,
-    lineHeight: 24,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    lineHeight: 22,
+    marginBottom: 6,
   },
   content: {
     fontSize: 14,
-    color: '#475569',
+    color: '#6B7280',
     lineHeight: 20,
-    marginBottom: 16,
+  },
+  attachmentsSection: {
+    marginBottom: 12,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 16,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: '#F3F4F6',
+    minHeight: 40,
   },
-  footerLeft: {
+  statsSection: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+    flex: 1,
   },
-  reactionButton: {
+  statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    gap: 6,
   },
-  reactionIcon: {
-    fontSize: 16,
-    marginRight: 6,
-  },
-  reactionIconActive: {
-    color: '#dc2626',
-  },
-  reactionCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  readStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  readStatsText: {
-    fontSize: 12,
-    color: '#64748b',
+  statText: {
+    fontSize: 13,
+    color: '#6B7280',
     fontWeight: '500',
+  },
+  statTextActive: {
+    color: '#DC2626',
   },
   actionButtons: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
   },
   actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    width: 36,
+    height: 36,
     borderRadius: 8,
+    backgroundColor: '#F9FAFB',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
-  },
-  pinAction: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FCD34D',
-  },
-  editAction: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#007AFF',
-  },
-  deleteAction: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FCA5A5',
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
+    borderColor: '#F3F4F6',
   },
 })
