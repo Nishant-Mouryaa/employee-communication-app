@@ -519,9 +519,7 @@ const handleReply = useCallback((message: Message) => {
                 <View style={styles.headerContent}>
                   <View style={styles.textContainer}>
                     <Text style={styles.title}>Chats</Text>
-                    <Text style={styles.subtitle}>
-                      {user?.email ? `Welcome, ${user.email.split('@')[0]}!` : 'Your conversations'}
-                    </Text>
+                    
                   </View>
                   
                   <TouchableOpacity
@@ -529,7 +527,7 @@ const handleReply = useCallback((message: Message) => {
                     onPress={() => setShowChannelModal(true)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="add-outline" size={24} color="#ffffff" />
+                    <Ionicons name="add-outline" size={24} color="#333" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -866,10 +864,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   conversationHeader: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#ffffff',
     borderBottomEndRadius: 16,
     borderBottomStartRadius: 16,
-    paddingBottom: 12,
+  
   },
   sidebarHeader: {
     backgroundColor: '#6366F1',
@@ -888,26 +886,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#333',
     marginBottom: 2,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: '#333',
     fontWeight: '500',
   },
   newChatButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(0, 0, 0, 0.2)',
   },
   conversationSidebar: {
     width: 350,

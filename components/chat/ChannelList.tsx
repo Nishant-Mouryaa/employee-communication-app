@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
-    backgroundColor: '#f8fafc',
+   
   },
   filterButton: {
     paddingHorizontal: 16,

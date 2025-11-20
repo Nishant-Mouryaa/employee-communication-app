@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   onlineStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: -4,
   },
   onlineIndicator: {
     width: 6,
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0ea5e9',
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '500',
     color: '#64748b',
   },
@@ -262,6 +262,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1e293b',
     flex: 1,
+    
   },
   actions: {
     flexDirection: 'row',

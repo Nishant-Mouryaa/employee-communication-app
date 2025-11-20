@@ -161,7 +161,7 @@ async function updateProfile() {
       return
     }
 
-    setLoading(true) // Move loading state here, after validation
+    setLoading(true)
 
     const updates = {
       id: user.id,
@@ -169,7 +169,7 @@ async function updateProfile() {
       full_name: fullName.trim(),
       department: department.trim(),
       position: position.trim(),
-      avatar_url: avatarUrl,
+      avatar_url: avatarUrl, // This should now be the latest value
       status: status.trim() || null,
       bio: bio.trim(),
       phone: phone.trim(),
@@ -177,14 +177,13 @@ async function updateProfile() {
       updated_at: new Date().toISOString(),
     }
 
-    // Use update with eq instead of upsert for better reliability
     const { error } = await supabase
       .from('profiles')
       .update(updates)
       .eq('id', user.id)
 
     if (error) {
-      console.error('Supabase error:', error) // Add logging
+      console.error('Supabase error:', error)
       throw error
     }
 
@@ -204,11 +203,8 @@ async function updateProfile() {
     Alert.alert('Success', 'Profile updated successfully!')
     setIsEditing(false)
     
-    // Refresh the profile to confirm the update
-    await getProfile()
-    
   } catch (error) {
-    console.error('Update error:', error) // Add logging
+    console.error('Update error:', error)
     if (error instanceof Error) {
       Alert.alert('Update failed', error.message)
     }
@@ -256,84 +252,126 @@ async function updateProfile() {
   }
 
   const uploadImage = async (asset: ImagePicker.ImagePickerAsset) => {
-    try {
-      if (!user) {
-        throw new Error('No user found')
-      }
-
-      setUploading(true)
-
-      const response = await fetch(asset.uri)
-      if (!response.ok) {
-        throw new Error('Failed to read selected image')
-      }
-
-      const arrayBuffer = response.arrayBuffer
-        ? await response.arrayBuffer()
-        : null
-
-      if (!arrayBuffer) {
-        throw new Error('Unable to process selected image')
-      }
-
-      const inferredExt =
-        asset.fileName?.split('.').pop()?.toLowerCase() ||
-        asset.uri.split('.').pop()?.toLowerCase() ||
-        'jpg'
-
-      const fileExt = inferredExt.replace('jpeg', 'jpg')
-      const contentType = asset.mimeType || `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`
-
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`
-      const filePath = `avatars/${fileName}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('profile-images')
-        .upload(filePath, arrayBuffer, {
-          contentType,
-          upsert: true
-        })
-
-      if (uploadError) {
-        throw uploadError
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('profile-images')
-        .getPublicUrl(filePath)
-
-      if (!publicUrlData?.publicUrl) {
-        throw new Error('Unable to retrieve profile image URL')
-      }
-
-      setAvatarUrl(publicUrlData.publicUrl)
-      Alert.alert('Success', 'Profile picture uploaded!')
-      setIsEditing(true)
-    } catch (error) {
-      console.error('Error uploading image:', error)
-      Alert.alert('Upload failed', 'Failed to upload image. Please try again.')
-    } finally {
-      setUploading(false)
+  try {
+    if (!user) {
+      throw new Error('No user found')
     }
-  }
 
-  const removeAvatar = () => {
-    Alert.alert(
-      'Remove Profile Picture',
-      'Are you sure you want to remove your profile picture?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
+    setUploading(true)
+
+    const response = await fetch(asset.uri)
+    if (!response.ok) {
+      throw new Error('Failed to read selected image')
+    }
+
+    const arrayBuffer = response.arrayBuffer
+      ? await response.arrayBuffer()
+      : null
+
+    if (!arrayBuffer) {
+      throw new Error('Unable to process selected image')
+    }
+
+    const inferredExt =
+      asset.fileName?.split('.').pop()?.toLowerCase() ||
+      asset.uri.split('.').pop()?.toLowerCase() ||
+      'jpg'
+
+    const fileExt = inferredExt.replace('jpeg', 'jpg')
+    const contentType = asset.mimeType || `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`
+
+    const fileName = `${user.id}-${Date.now()}.${fileExt}`
+    const filePath = `avatars/${fileName}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('profile-images')
+      .upload(filePath, arrayBuffer, {
+        contentType,
+        upsert: true
+      })
+
+    if (uploadError) {
+      throw uploadError
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('profile-images')
+      .getPublicUrl(filePath)
+
+    if (!publicUrlData?.publicUrl) {
+      throw new Error('Unable to retrieve profile image URL')
+    }
+
+    const avatarUrl = publicUrlData.publicUrl;
+
+    // ✅ CRITICAL: Save the avatar URL to the database
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ 
+        avatar_url: avatarUrl,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+
+    if (updateError) {
+      throw updateError
+    }
+
+    // Update both local state and original values
+    setAvatarUrl(avatarUrl)
+    setOriginalValues(prev => ({
+      ...prev,
+      avatarUrl: avatarUrl
+    }))
+    
+    Alert.alert('Success', 'Profile picture uploaded!')
+    setIsEditing(true)
+  } catch (error) {
+    console.error('Error uploading image:', error)
+    Alert.alert('Upload failed', 'Failed to upload image. Please try again.')
+  } finally {
+    setUploading(false)
+  }
+}
+
+const removeAvatar = async () => {
+  Alert.alert(
+    'Remove Profile Picture',
+    'Are you sure you want to remove your profile picture?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            // Remove from database
+            const { error } = await supabase
+              .from('profiles')
+              .update({ 
+                avatar_url: null,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', user!.id)
+
+            if (error) throw error
+
+            // Update local state
             setAvatarUrl('')
+            setOriginalValues(prev => ({
+              ...prev,
+              avatarUrl: ''
+            }))
             setIsEditing(true)
+          } catch (error) {
+            console.error('Error removing avatar:', error)
+            Alert.alert('Error', 'Failed to remove profile picture')
           }
         }
-      ]
-    )
-  }
+      }
+    ]
+  )
+}
 
   const hasChanges = () => {
     return (
