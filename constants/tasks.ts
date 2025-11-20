@@ -1,6 +1,9 @@
+import { IS_MOBILE } from "./home";
+
 // constants/tasks.ts
 export const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 export const MAX_COMMENT_LENGTH = 500
+
 
 export const TASK_STATUSES: { value: TaskStatus; label: string }[] = [
   { value: 'todo', label: 'To Do' },
