@@ -8,20 +8,43 @@ export const useRealtimeAnnouncements = (onUpdate: () => void) => {
       .channel('announcements-changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'announcements' },
-        onUpdate
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'announcements' 
+        },
+        (payload) => {
+          console.log('Announcements change:', payload)
+          onUpdate()
+        }
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'announcement_reactions' },
-        onUpdate
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'announcement_reactions' 
+        },
+        (payload) => {
+          console.log('Reactions change:', payload)
+          onUpdate()
+        }
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'announcement_reads' },
-        onUpdate
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'announcement_reads' 
+        },
+        (payload) => {
+          console.log('Reads change:', payload)
+          onUpdate()
+        }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status)
+      })
 
     return () => {
       subscription.unsubscribe()

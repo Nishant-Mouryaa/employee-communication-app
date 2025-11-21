@@ -64,7 +64,16 @@ export default function AnnouncementsScreen() {
   const [submitting, setSubmitting] = useState(false)
   const [readStartTime, setReadStartTime] = useState<number>(0)
 
-  useRealtimeAnnouncements(fetchAnnouncements)
+  // Add useEffect to debug real-time updates
+  useEffect(() => {
+    console.log('Announcements updated:', announcements.length)
+  }, [announcements])
+
+  // Enhanced real-time subscription with better error handling
+  useRealtimeAnnouncements(() => {
+    console.log('Real-time update triggered, refreshing announcements...')
+    fetchAnnouncements()
+  })
 
   const handleMarkAsRead = async (announcementId: string) => {
     if (user) {
@@ -74,13 +83,21 @@ export default function AnnouncementsScreen() {
     }
   }
 
+// Update your handlers to immediately refresh data
   const handleToggleReaction = async (announcementId: string) => {
     if (!user) {
       Alert.alert(t('common.error'), 'You must be logged in to react')
       return
     }
-    await announcementService.toggleReaction(announcementId, user.id)
-    await analyticsService.logActivity(user.id, announcementId, 'reaction')
+    
+    try {
+      await announcementService.toggleReaction(announcementId, user.id)
+      await analyticsService.logActivity(user.id, announcementId, 'reaction')
+      // Force immediate refresh
+      fetchAnnouncements()
+    } catch (error) {
+      console.error('Error toggling reaction:', error)
+    }
   }
 
   const handleTogglePin = async (announcementId: string, currentPinStatus: boolean) => {
@@ -126,7 +143,7 @@ export default function AnnouncementsScreen() {
     )
   }
 
-  const handleSubmit = async (formData: any) => {
+ const handleSubmit = async (formData: any) => {
     if (!user) {
       Alert.alert(t('common.error'), 'You must be logged in')
       return
@@ -153,6 +170,8 @@ export default function AnnouncementsScreen() {
         Alert.alert(t('common.success'), 'Announcement posted successfully!')
       }
       
+      // Refresh announcements after successful operation
+      await fetchAnnouncements()
       closeModal()
     } catch (error) {
       Alert.alert(t('common.error'), editingAnnouncement ? 'Failed to update announcement' : 'Failed to post announcement')
@@ -160,6 +179,7 @@ export default function AnnouncementsScreen() {
       setSubmitting(false)
     }
   }
+
 
   const handleSchedule = async (scheduledAt: Date, expiresAt?: Date) => {
     if (!user || !userRole.canSchedule) {

@@ -1,5 +1,5 @@
 // hooks/useAnnouncements.ts
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { Announcement } from '../types/announcement'
 import { useAuth } from './useAuth'
@@ -9,9 +9,11 @@ export const useAnnouncements = () => {
   const [loading, setLoading] = useState(false)
   const { user } = useAuth()
 
-  const fetchAnnouncements = async () => {
+  // Use useCallback to prevent unnecessary re-renders
+  const fetchAnnouncements = useCallback(async () => {
     try {
       setLoading(true)
+      console.log('Fetching announcements...')
       
       const { data, error } = await supabase
         .from('announcements')
@@ -35,27 +37,47 @@ export const useAnnouncements = () => {
         `)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
 
       if (data) {
+        console.log(`Fetched ${data.length} announcements`)
+        
         const announcementsWithDetails = await Promise.all(
           data.map(async (item) => {
-            const { data: reactions } = await supabase
+            // Fetch reactions
+            const { data: reactions, error: reactionsError } = await supabase
               .from('announcement_reactions')
               .select('*')
               .eq('announcement_id', item.id)
 
-            const { data: readReceipt } = await supabase
+            if (reactionsError) {
+              console.error('Error fetching reactions:', reactionsError)
+            }
+
+            // Fetch user's read receipt
+            const { data: readReceipt, error: readError } = await supabase
               .from('announcement_reads')
               .select('*')
               .eq('announcement_id', item.id)
               .eq('user_id', user?.id)
               .single()
 
-            const { count: readCount } = await supabase
+            if (readError && readError.code !== 'PGRST116') {
+              console.error('Error fetching read receipt:', readError)
+            }
+
+            // Fetch read count
+            const { count: readCount, error: countError } = await supabase
               .from('announcement_reads')
               .select('*', { count: 'exact', head: true })
               .eq('announcement_id', item.id)
+
+            if (countError) {
+              console.error('Error fetching read count:', countError)
+            }
 
             const userHasReacted = reactions?.some(r => r.user_id === user?.id) || false
 
@@ -95,11 +117,11 @@ export const useAnnouncements = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.id]) // Add user.id as dependency
 
   useEffect(() => {
     fetchAnnouncements()
-  }, [])
+  }, [fetchAnnouncements])
 
   return { announcements, loading, fetchAnnouncements, setAnnouncements }
 }
