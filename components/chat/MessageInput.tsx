@@ -25,7 +25,7 @@ interface MessageInputProps {
   onTyping: () => void
   replyingTo?: Message | null
   onCancelReply?: () => void
-  channelMembers?: Map<string, Profile>  // Add this
+  channelMembers?: Map<string, Profile>
   attachments?: PendingAttachment[]
   onAttachPress?: () => void
   onRemoveAttachment?: (id: string) => void
@@ -92,11 +92,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     const textBeforeCursor = value.substring(0, cursorPosition)
     const textAfterCursor = value.substring(cursorPosition)
     
-    // Find the @ symbol position
     const atIndex = textBeforeCursor.lastIndexOf('@')
     
     if (atIndex !== -1) {
-      // Replace from @ to cursor with the mention
       const beforeAt = textBeforeCursor.substring(0, atIndex)
       const mention = `@${member.username} `
       const newText = beforeAt + mention + textAfterCursor
@@ -104,7 +102,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       onChangeText(newText)
       setShowMentions(false)
       
-      // Set cursor position after the mention
       setTimeout(() => {
         setCursorPosition(beforeAt.length + mention.length)
       }, 0)
@@ -260,51 +257,62 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           </View>
         )}
         <View style={styles.inputContainerMobile}>
-          <View style={styles.leadingActionsMobile}>
+          {/* Left side buttons */}
+          <View style={styles.leftButtonsMobile}>
             <TouchableOpacity
               style={[
-                styles.actionIconButtonMobile,
-                showEmojiTray && styles.actionIconButtonActive
+                styles.inlineIconButtonMobile,
+                showEmojiTray && styles.inlineIconButtonActive
               ]}
               onPress={handleEmojiToggle}
               disabled={sending || uploadingAttachments}
             >
-              <Text style={styles.actionIconText}>😊</Text>
-            </TouchableOpacity>
-            {onAttachPress && (
-              <TouchableOpacity
-                style={[
-                  styles.actionIconButtonMobile,
-                  (sending || uploadingAttachments) && styles.actionIconButtonDisabled
-                ]}
-                onPress={handleAttachPress}
-                disabled={sending || uploadingAttachments}
-              >
-                <Text style={styles.actionIconText}>📎</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[
-                styles.actionIconButtonMobile,
-                showSlashMenu && styles.actionIconButtonActive
-              ]}
-              onPress={handleSlashToggle}
-              disabled={sending || uploadingAttachments}
-            >
-              <Text style={styles.actionIconText}>/</Text>
+              <Text style={styles.inlineIconText}>😊</Text>
             </TouchableOpacity>
           </View>
-          <TextInput
-            style={styles.textInputMobile}
-            value={value}
-            onChangeText={handleChangeText}
-            onSelectionChange={handleSelectionChange}
-            placeholder={placeholder}
-            placeholderTextColor="#999"
-            multiline
-            maxLength={MESSAGE_MAX_LENGTH}
-            editable={!sending && !uploadingAttachments}
-          />
+
+          {/* Input field wrapper with integrated buttons */}
+          <View style={styles.inputFieldWrapperMobile}>
+            <TextInput
+              style={styles.textInputMobile}
+              value={value}
+              onChangeText={handleChangeText}
+              onSelectionChange={handleSelectionChange}
+              placeholder={placeholder}
+              placeholderTextColor="#999"
+              multiline
+              maxLength={MESSAGE_MAX_LENGTH}
+              editable={!sending && !uploadingAttachments}
+            />
+            
+            {/* Right side inline buttons */}
+            <View style={styles.inputRightActionsMobile}>
+              {onAttachPress && (
+                <TouchableOpacity
+                  style={[
+                    styles.inlineIconButtonMobile,
+                    (sending || uploadingAttachments) && styles.inlineIconButtonDisabled
+                  ]}
+                  onPress={handleAttachPress}
+                  disabled={sending || uploadingAttachments}
+                >
+                  <Text style={styles.inlineIconText}>📎</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[
+                  styles.inlineIconButtonMobile,
+                  showSlashMenu && styles.inlineIconButtonActive
+                ]}
+                onPress={handleSlashToggle}
+                disabled={sending || uploadingAttachments}
+              >
+                <Text style={styles.inlineIconTextSmall}>/</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Send button */}
           <TouchableOpacity 
             style={[styles.sendButtonMobile, !canSend && styles.sendButtonDisabled]} 
             onPress={handleSendPress}
@@ -313,7 +321,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             {sending || uploadingAttachments ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <Text style={styles.sendButtonText}>➤</Text>
+              <Text style={styles.sendButtonIcon}>➤</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -321,6 +329,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     )
   }
 
+  // Desktop layout
   return (
     <View style={styles.inputWrapper}>
       {showMentions && members.length > 0 && (
@@ -371,51 +380,62 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </View>
       )}
       <View style={styles.inputContainer}>
-        <View style={styles.leadingActions}>
+        {/* Left emoji button */}
+        <View style={styles.leftButtons}>
           <TouchableOpacity
             style={[
-              styles.actionIconButton,
-              showEmojiTray && styles.actionIconButtonActive
+              styles.inlineIconButton,
+              showEmojiTray && styles.inlineIconButtonActive
             ]}
             onPress={handleEmojiToggle}
             disabled={sending || uploadingAttachments}
           >
-            <Text style={styles.actionIconText}>😊</Text>
-          </TouchableOpacity>
-          {onAttachPress && (
-            <TouchableOpacity
-              style={[
-                styles.actionIconButton,
-                (sending || uploadingAttachments) && styles.actionIconButtonDisabled
-              ]}
-              onPress={handleAttachPress}
-              disabled={sending || uploadingAttachments}
-            >
-              <Text style={styles.actionIconText}>📎</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[
-              styles.actionIconButton,
-              showSlashMenu && styles.actionIconButtonActive
-            ]}
-            onPress={handleSlashToggle}
-            disabled={sending || uploadingAttachments}
-          >
-            <Text style={styles.actionIconText}>/</Text>
+            <Text style={styles.inlineIconText}>😊</Text>
           </TouchableOpacity>
         </View>
-        <TextInput
-          style={styles.textInput}
-          value={value}
-          onChangeText={handleChangeText}
-          onSelectionChange={handleSelectionChange}
-          placeholder={placeholder}
-          placeholderTextColor="#999"
-          multiline
-          maxLength={MESSAGE_MAX_LENGTH}
-          editable={!sending && !uploadingAttachments}
-        />
+
+        {/* Input field wrapper with integrated buttons */}
+        <View style={styles.inputFieldWrapper}>
+          <TextInput
+            style={styles.textInput}
+            value={value}
+            onChangeText={handleChangeText}
+            onSelectionChange={handleSelectionChange}
+            placeholder={placeholder}
+            placeholderTextColor="#999"
+            multiline
+            maxLength={MESSAGE_MAX_LENGTH}
+            editable={!sending && !uploadingAttachments}
+          />
+          
+          {/* Right side inline buttons */}
+          <View style={styles.inputRightActions}>
+            {onAttachPress && (
+              <TouchableOpacity
+                style={[
+                  styles.inlineIconButton,
+                  (sending || uploadingAttachments) && styles.inlineIconButtonDisabled
+                ]}
+                onPress={handleAttachPress}
+                disabled={sending || uploadingAttachments}
+              >
+                <Text style={styles.inlineIconText}>📎</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.inlineIconButton,
+                showSlashMenu && styles.inlineIconButtonActive
+              ]}
+              onPress={handleSlashToggle}
+              disabled={sending || uploadingAttachments}
+            >
+              <Text style={styles.inlineIconTextSmall}>/</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Send button */}
         <TouchableOpacity 
           style={[styles.sendButton, !canSend && styles.sendButtonDisabled]} 
           onPress={handleSendPress}
@@ -453,18 +473,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 12,
   },
-  attachmentsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    gap: 8,
-  },
   inputContainerMobile: {
     flexDirection: 'row',
     padding: 12,
     paddingBottom: Platform.OS === 'ios' ? 12 : 12,
     alignItems: 'flex-end',
+    gap: 8,
+  },
+  attachmentsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
     gap: 8,
   },
   attachmentsContainerMobile: {
@@ -474,30 +494,108 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     gap: 8,
   },
-  textInput: {
+  
+  // Left buttons container
+  leftButtons: {
+    justifyContent: 'flex-end',
+    paddingBottom: 12,
+  },
+  leftButtonsMobile: {
+    justifyContent: 'flex-end',
+    paddingBottom: 10,
+  },
+
+  // Input field wrapper with integrated buttons
+  inputFieldWrapper: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginRight: 12,
+    backgroundColor: '#f8fafc',
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingVertical: 8,
+  },
+  inputFieldWrapperMobile: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 24,
+    backgroundColor: '#f8fafc',
+    paddingLeft: 16,
+    paddingRight: 6,
+    paddingVertical: 6,
+  },
+
+  // Text input (no border, fills space)
+  textInput: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingRight: 8,
     maxHeight: 100,
     fontSize: 15,
-    backgroundColor: '#f8fafc',
+    color: '#1e293b',
   },
   textInputMobile: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 8,
+    paddingVertical: 6,
+    paddingRight: 6,
     maxHeight: 100,
     fontSize: 15,
-    backgroundColor: '#f8fafc',
+    color: '#1e293b',
   },
+
+  // Right side actions inside input
+  inputRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingBottom: 2,
+  },
+  inputRightActionsMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingBottom: 2,
+  },
+
+  // Inline icon buttons (inside input field)
+  inlineIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  inlineIconButtonMobile: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  inlineIconButtonActive: {
+    backgroundColor: '#e0e7ff',
+  },
+  inlineIconButtonDisabled: {
+    opacity: 0.5,
+  },
+  inlineIconText: {
+    fontSize: 20,
+  },
+  inlineIconTextSmall: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+
+  // Send button
   sendButton: {
     backgroundColor: '#6366F1',
     paddingHorizontal: 20,
@@ -505,7 +603,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 60,
+    minWidth: 70,
   },
   sendButtonMobile: {
     backgroundColor: '#6366F1',
@@ -523,70 +621,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  leadingActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  leadingActionsMobile: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  actionIconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionIconButtonMobile: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionIconButtonDisabled: {
-    opacity: 0.5,
-  },
-  actionIconButtonActive: {
-    backgroundColor: '#e0e7ff',
-  },
-  actionIconText: {
+  sendButtonIcon: {
+    color: 'white',
     fontSize: 18,
   },
-  attachButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#e2e8f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  attachButtonMobile: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#e2e8f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  attachButtonDisabled: {
-    opacity: 0.6,
-  },
-  attachButtonIcon: {
-    fontSize: 18,
-  },
-  attachButtonText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#475569',
-  },
+
+  // Attachment previews
   attachmentItemImage: {
     position: 'relative',
     width: 80,
@@ -671,6 +711,8 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 2,
   },
+
+  // Emoji tray
   emojiTray: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -706,6 +748,8 @@ const styles = StyleSheet.create({
   emojiText: {
     fontSize: 22,
   },
+
+  // Slash menu
   slashMenu: {
     paddingHorizontal: 12,
     paddingVertical: 10,
