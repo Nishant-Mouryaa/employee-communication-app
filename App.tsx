@@ -5,7 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { View, ActivityIndicator, Platform, Text } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { StatusBar } from 'expo-status-bar'
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import initI18n from './localization/i18n'
 import { HomeStackNavigator } from './navigators/HomeStackNavigator'
 
@@ -23,10 +23,11 @@ import AdminScreen from './screens/AdminScreen'
 
 const Tab = createBottomTabNavigator()
 
-function AppContent() {
-  const { user, loading } = useAuth()
+function TabNavigator() {
+  const { user } = useAuth()
   const [isUserAdmin, setIsUserAdmin] = React.useState(false)
   const [checkingAdmin, setCheckingAdmin] = React.useState(true)
+  const insets = useSafeAreaInsets()
   
   React.useEffect(() => {
     const checkAdmin = async () => {
@@ -49,7 +50,119 @@ function AppContent() {
     checkAdmin()
   }, [user])
 
-  if (loading || checkingAdmin) {
+  if (checkingAdmin) {
+    return (
+      <View style={{ 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        backgroundColor: '#f8f9fa' 
+      }}>
+        <ActivityIndicator size="large" color="#6366f1" />
+      </View>
+    )
+  }
+
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: '#ffffff',
+          borderTopWidth: 0,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          height: Platform.OS === 'ios' ? 88 : 65 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === 'ios' ? 28 : 8 + insets.bottom,
+        },
+        tabBarActiveTintColor: '#6366f1',
+        tabBarInactiveTintColor: '#9ca3af',
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          marginTop: 4,
+        },
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: keyof typeof Ionicons.glyphMap = 'home'
+
+          if (route.name === 'Home') {
+            iconName = focused ? 'home' : 'home-outline'
+          } else if (route.name === 'Chat') {
+            iconName = focused ? 'chatbubbles' : 'chatbubbles-outline'
+          } else if (route.name === 'Tasks') {
+            iconName = focused ? 'checkmark-circle' : 'checkmark-circle-outline'
+          } else if (route.name === 'Announcements') {
+            iconName = focused ? 'megaphone' : 'megaphone-outline'
+          } else if (route.name === 'Admin') {
+            iconName = focused ? 'shield' : 'shield-outline'
+          }
+
+          return (
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 50,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: focused ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+              }}
+            >
+              <Ionicons name={iconName} size={24} color={color} />
+            </View>
+          )
+        },
+      })}
+    >
+      <Tab.Screen 
+        name="Home" 
+        component={HomeStackNavigator}
+        options={{
+          tabBarLabel: 'Home',
+        }}
+      />
+      <Tab.Screen 
+        name="Chat" 
+        component={ChatScreen}
+        options={{
+          tabBarLabel: 'Chat',
+        }}
+      />
+      <Tab.Screen 
+        name="Tasks" 
+        component={TasksScreen}
+        options={{
+          tabBarLabel: 'Tasks',
+        }}
+      />
+      <Tab.Screen 
+        name="Announcements" 
+        component={AnnouncementsScreen}
+        options={{
+          tabBarLabel: 'News',
+        }}
+      />
+      {isUserAdmin && (
+        <Tab.Screen 
+          name="Admin" 
+          component={AdminScreen}
+          options={{
+            tabBarLabel: 'Admin',
+          }}
+        />
+      )}
+    </Tab.Navigator>
+  )
+}
+
+function AppContent() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
     return (
       <View style={{ 
         flex: 1, 
@@ -75,101 +188,7 @@ function AppContent() {
       <StatusBar style="auto" />
       <NavigationContainer>
         {user ? (
-          <Tab.Navigator
-            screenOptions={({ route }) => ({
-              headerShown: false,
-              tabBarStyle: {
-                backgroundColor: '#ffffff',
-                borderTopWidth: 0,
-                elevation: 8,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: -4 },
-                shadowOpacity: 0.1,
-                shadowRadius: 8,
-                height: Platform.OS === 'ios' ? 88 : 65,
-                paddingTop: 8,
-                paddingBottom: Platform.OS === 'ios' ? 28 : 8,
-              },
-              tabBarActiveTintColor: '#6366f1',
-              tabBarInactiveTintColor: '#9ca3af',
-              tabBarLabelStyle: {
-                fontSize: 12,
-                fontWeight: '600',
-                marginTop: 4,
-              },
-              tabBarIcon: ({ focused, color, size }) => {
-                let iconName: keyof typeof Ionicons.glyphMap = 'home'
-
-                if (route.name === 'Home') {
-                  iconName = focused ? 'home' : 'home-outline'
-                } else if (route.name === 'Chat') {
-                  iconName = focused ? 'chatbubbles' : 'chatbubbles-outline'
-                } else if (route.name === 'Tasks') {
-                  iconName = focused ? 'checkmark-circle' : 'checkmark-circle-outline'
-                } else if (route.name === 'Announcements') {
-                  iconName = focused ? 'megaphone' : 'megaphone-outline'
-                } else if (route.name === 'Admin') {
-                  iconName = focused ? 'shield' : 'shield-outline'
-                }
-
-                return (
-         
-                  <View
-                    style={{
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 50,
-                      height: 32,
-                      borderRadius: 16,
-                      backgroundColor: focused ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
-                    }}
-                  >
-                    <Ionicons name={iconName} size={24} color={color} />
-                  </View>
-             
-                )
-              },
-            })}
-          >
-            <Tab.Screen 
-              name="Home" 
-             
-               component={HomeStackNavigator}
-              options={{
-                tabBarLabel: 'Home',
-              }}
-            />
-            <Tab.Screen 
-              name="Chat" 
-              component={ChatScreen}
-              options={{
-                tabBarLabel: 'Chat',
-              }}
-            />
-            <Tab.Screen 
-              name="Tasks" 
-              component={TasksScreen}
-              options={{
-                tabBarLabel: 'Tasks',
-              }}
-            />
-            <Tab.Screen 
-              name="Announcements" 
-              component={AnnouncementsScreen}
-              options={{
-                tabBarLabel: 'News',
-              }}
-            />
-            {isUserAdmin && (
-              <Tab.Screen 
-                name="Admin" 
-                component={AdminScreen}
-                options={{
-                  tabBarLabel: 'Admin',
-                }}
-              />
-            )}
-          </Tab.Navigator>
+          <TabNavigator />
         ) : (
           <Auth />
         )}
@@ -190,7 +209,6 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Failed to initialize i18n:', error)
         setInitError('Failed to initialize app')
-        // Even if i18n fails, we can still run the app
         setI18nInitialized(true)
       }
     }
@@ -243,14 +261,6 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
         }}>
           {initError}
         </Text>
-        <Text style={{ 
-          fontSize: 12, 
-          color: '#64748b',
-          textAlign: 'center',
-          marginTop: 16
-        }}>
-          App will continue with default settings
-        </Text>
       </View>
     )
   }
@@ -263,7 +273,9 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <AppInitializer>
-          <AppContent />
+          <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+            <AppContent />
+          </SafeAreaView>
         </AppInitializer>
       </AuthProvider>
     </SafeAreaProvider>
