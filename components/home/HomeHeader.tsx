@@ -31,7 +31,7 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.headerContent}>
           <View style={styles.textContainer}>
@@ -60,7 +60,7 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
           </View>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   )
 }
 

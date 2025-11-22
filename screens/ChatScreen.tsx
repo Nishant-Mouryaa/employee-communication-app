@@ -505,7 +505,7 @@ const handleReply = useCallback((message: Message) => {
   // WhatsApp-like layout with conversation list
   if (IS_MOBILE) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <KeyboardAvoidingView 
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -674,7 +674,7 @@ const handleReply = useCallback((message: Message) => {
             onSelectChannel={handleChannelSelect}
           />
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </View>
     )
   }
 

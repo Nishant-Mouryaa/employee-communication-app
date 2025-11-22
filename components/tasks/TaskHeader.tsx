@@ -29,13 +29,13 @@ export const TaskHeader: React.FC<TaskHeaderProps> = ({ onAddTaskPress }) => {
 
 const styles = StyleSheet.create({
   header: {
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 24,
   },
   title: {
-    fontSize: IS_MOBILE ? 24 : 24,
-    fontWeight: '800',
+    fontSize: 28,
+    fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
   },
