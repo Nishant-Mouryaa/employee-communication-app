@@ -5,7 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { View, ActivityIndicator, Platform, Text } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { StatusBar } from 'expo-status-bar'
-import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import initI18n from './localization/i18n'
 import { HomeStackNavigator } from './navigators/HomeStackNavigator'
 
@@ -113,6 +113,7 @@ function AppContent() {
                 }
 
                 return (
+         
                   <View
                     style={{
                       alignItems: 'center',
@@ -125,6 +126,7 @@ function AppContent() {
                   >
                     <Ionicons name={iconName} size={24} color={color} />
                   </View>
+             
                 )
               },
             })}

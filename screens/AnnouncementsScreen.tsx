@@ -283,18 +283,7 @@ export default function AnnouncementsScreen() {
                 onDelete={() => handleDelete(item.id, item.author_id)}
               />
               
-              {/* Version History Button */}
-              {(userRole.isAdmin || user?.id === item.author_id) && (
-                <TouchableOpacity
-                  style={styles.versionHistoryButton}
-                  onPress={() => handleVersionHistory(item.id)}
-                >
-                  <Text style={styles.versionHistoryIcon}>📜</Text>
-                  <Text style={styles.versionHistoryText}>
-                    {t('versionHistory.title')}
-                  </Text>
-                </TouchableOpacity>
-              )}
+      
               
               {/* Show comments section if announcement is selected */}
               {selectedAnnouncement?.id === item.id && (

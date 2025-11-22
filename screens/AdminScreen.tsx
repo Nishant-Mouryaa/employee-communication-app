@@ -17,6 +17,7 @@ import { getComplianceSettings, updateComplianceSettings, exportUserData, getAud
 import { upsertAccessPolicy, getAccessPolicy } from '../services/adminService'
 import { UserRole, ComplianceSettings, AccessPolicy } from '../types/security'
 import { Profile } from '../types/chat'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 export default function AdminScreen() {
   const { user } = useAuth()
@@ -75,8 +76,11 @@ export default function AdminScreen() {
         getAccessPolicy(),
         getAuditLogs(50),
       ])
-      
-      setUsers(usersData)
+
+       console.log('Users data:', usersData); // Add this line
+    console.log('Number of users:', usersData?.length); // And this line
+    
+    setUsers(usersData || []); // Ensure it's always an array
       setComplianceSettings(settings)
       setAccessPolicy(policy)
       setAuditLogs(logs)
@@ -217,13 +221,13 @@ export default function AdminScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
+      <SafeAreaView style={styles.header}>
         <Text style={styles.headerTitle}>Admin Panel</Text>
-      </View>
+      </SafeAreaView>
 
       {/* Tabs */}
       <View style={styles.tabs}>
-        {(['channels', 'users', 'policies', 'compliance', 'audit'] as const).map(tab => (
+        {(['channels', 'users'] as const).map(tab => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === tab && styles.tabActive]}
@@ -306,57 +310,11 @@ export default function AdminScreen() {
         </View>
       )}
 
-      {/* Access Policies */}
-      {activeTab === 'policies' && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Access Policies</Text>
-          <View style={styles.switchRow}>
-            <Text>Allow cross-department messaging</Text>
-            <Switch value={allowCrossDept} onValueChange={setAllowCrossDept} />
-          </View>
-          <TouchableOpacity style={styles.button} onPress={handleSaveAccessPolicy}>
-            <Text style={styles.buttonText}>Save Policy</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+     
 
-      {/* Compliance */}
-      {activeTab === 'compliance' && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Compliance Settings</Text>
-          <View style={styles.settingRow}>
-            <Text>Data Retention (days)</Text>
-            <TextInput
-              style={styles.numberInput}
-              value={retentionDays.toString()}
-              onChangeText={(text) => setRetentionDays(parseInt(text) || 365)}
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={styles.switchRow}>
-            <Text>Enable Encryption</Text>
-            <Switch value={encryptionEnabled} onValueChange={setEncryptionEnabled} />
-          </View>
-          <TouchableOpacity style={styles.button} onPress={handleSaveComplianceSettings}>
-            <Text style={styles.buttonText}>Save Settings</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+ 
 
-      {/* Audit Logs */}
-      {activeTab === 'audit' && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Audit Logs</Text>
-          {auditLogs.map(log => (
-            <View key={log.id} style={styles.logCard}>
-              <Text style={styles.logAction}>{log.action}</Text>
-              <Text style={styles.logDetails}>
-                {log.resource_type} • {new Date(log.created_at).toLocaleString()}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
+    
     </ScrollView>
   )
 }

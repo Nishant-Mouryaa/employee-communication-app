@@ -335,3 +335,30 @@ export const removeUsersFromChannel = async (
   }
 }
 
+/**
+ * Get current access policy (admin only)
+ */
+export const getAccessPolicy = async (): Promise<AccessPolicy | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('access_policies')
+      .select('*')
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (error) {
+      if (error.code === 'PGRST116') { // No rows returned
+        return null
+      }
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error('Error fetching access policy:', error)
+    return null
+  }
+}
+
