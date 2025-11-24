@@ -4,13 +4,13 @@ import { supabase } from '../lib/supabase'
 import { NotificationSettings } from '../types/announcement'
 import { useAuth } from './useAuth'
 
-export const useNotificationSettings = () => {
+export const useNotificationSettings = (organizationId: string | undefined) => {
   const { user } = useAuth()
   const [settings, setSettings] = useState<NotificationSettings | null>(null)
   const [loading, setLoading] = useState(false)
 
   const fetchSettings = async () => {
-    if (!user) return
+    if (!user || !organizationId) return
 
     try {
       setLoading(true)
@@ -18,6 +18,7 @@ export const useNotificationSettings = () => {
         .from('notification_settings')
         .select('*')
         .eq('user_id', user.id)
+        .eq('organization_id', organizationId)
         .single()
 
       if (error && error.code !== 'PGRST116') throw error
@@ -28,6 +29,7 @@ export const useNotificationSettings = () => {
           .from('notification_settings')
           .insert({
             user_id: user.id,
+            organization_id: organizationId,
             new_announcements: true,
             important_only: false,
             category_filters: [],
@@ -52,7 +54,7 @@ export const useNotificationSettings = () => {
   }
 
   const updateSettings = async (updates: Partial<NotificationSettings>) => {
-    if (!user || !settings) return
+    if (!user || !settings || !organizationId) return
 
     try {
       const { data, error } = await supabase
@@ -62,6 +64,7 @@ export const useNotificationSettings = () => {
           updated_at: new Date().toISOString()
         })
         .eq('user_id', user.id)
+        .eq('organization_id', organizationId)
         .select()
         .single()
 
@@ -76,7 +79,7 @@ export const useNotificationSettings = () => {
 
   useEffect(() => {
     fetchSettings()
-  }, [user])
+  }, [user, organizationId])
 
   return { settings, loading, updateSettings, fetchSettings }
 }

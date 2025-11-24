@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as DocumentPicker from 'expo-document-picker'
 import { useAuth } from '../hooks/useAuth'
+import { useTenant } from '../hooks/useTenant'
 import { useChatData } from '../hooks/useChatData'
 import { useRealtimeChat } from '../hooks/useRealtimeChat'
 import { useTypingIndicator } from '../hooks/useTypingIndicator'
@@ -44,6 +45,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 export default function ChatScreen() {
   const { user } = useAuth()
+  const { organizationId, loading: tenantLoading } = useTenant()
   
   // All state declarations at the top - this is crucial!
   const [message, setMessage] = useState('')
@@ -156,11 +158,11 @@ const handleReply = useCallback((message: Message) => {
     refresh,
     addReactionToMessage,
     removeReactionFromMessage,
-    createDirectMessage, 
-  } = useChatData(user?.id)
+    createDirectMessage,
+  } = useChatData(user?.id, organizationId || undefined)
 
   const handleStartDirectMessage = useCallback(async (member: ChannelMember) => {
-    if (!user?.id || member.user_id === user.id) {
+    if (!user?.id || member.user_id === user.id || !organizationId) {
       console.log('Cannot start DM: same user or no user ID')
       return
     }
@@ -184,7 +186,7 @@ const handleReply = useCallback((message: Message) => {
       console.error('Error starting direct message:', error)
       Alert.alert('Error', 'Failed to start direct message. Please try again.')
     }
-  }, [user?.id, createDirectMessage, selectChannel])
+  }, [user?.id, organizationId, createDirectMessage, selectChannel])
 
   const { typingUsers, handleTyping, handleStopTyping } = useTypingIndicator({
     channelId: selectedChannel?.id,
@@ -198,9 +200,9 @@ const handleReply = useCallback((message: Message) => {
   // Load detailed members list when channel changes
   useEffect(() => {
     const loadMembersList = async () => {
-      if (selectedChannel?.id) {
+      if (selectedChannel?.id && organizationId) {
         try {
-          const members = await fetchChannelMembersList(selectedChannel.id)
+          const members = await fetchChannelMembersList(selectedChannel.id, organizationId)
           setChannelMembersList(members)
         } catch (error) {
           console.error('Error loading members list:', error)
@@ -212,7 +214,7 @@ const handleReply = useCallback((message: Message) => {
     }
 
     loadMembersList()
-  }, [selectedChannel?.id])
+  }, [selectedChannel?.id, organizationId])
 
   // Realtime subscriptions - must be unconditional
   useRealtimeChat({
@@ -221,10 +223,10 @@ const handleReply = useCallback((message: Message) => {
     onNewMessage: useCallback(async (newMessage) => {
       addMessage(newMessage)
       
-      if (newMessage.user_id !== user?.id) {
-        await markMessageAsRead(newMessage.id, user?.id || '')
+      if (newMessage.user_id !== user?.id && organizationId) {
+        await markMessageAsRead(newMessage.id, user?.id || '', organizationId)
       }
-    }, [addMessage, user?.id]),
+    }, [addMessage, user?.id, organizationId]),
     onDeleteMessage: useCallback((messageId) => {
       deleteMessage(messageId)
     }, [deleteMessage]),
@@ -273,14 +275,14 @@ const handleReply = useCallback((message: Message) => {
   })
 
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id && organizationId) {
       setHasUserChecked(true)
       loadChannels()
     }
-  }, [user?.id, loadChannels])
+  }, [user?.id, organizationId, loadChannels])
 
   useEffect(() => {
-    if (selectedChannel?.id && user?.id) {
+    if (selectedChannel?.id && user?.id && organizationId) {
       loadMessages(selectedChannel.id)
       loadChannelMembers(selectedChannel.id)
       
@@ -294,7 +296,7 @@ const handleReply = useCallback((message: Message) => {
         setCanPin(false)
       }
     }
-  }, [selectedChannel?.id, user?.id, loadMessages, loadChannelMembers])
+  }, [selectedChannel?.id, user?.id, organizationId, loadMessages, loadChannelMembers])
 
   const handleEditMessage = useCallback((message: Message) => {
     setEditingMessage(message)
@@ -417,14 +419,14 @@ const handleReply = useCallback((message: Message) => {
   }, [])
 
   const handleStarMessage = useCallback(async (messageId: string) => {
-    if (!user?.id) return
+    if (!user?.id || !organizationId) return
     
     try {
-      const isStarred = await isMessageStarred(messageId, user.id)
+      const isStarred = await isMessageStarred(messageId, user.id, organizationId)
       if (isStarred) {
-        await unstarMessage(messageId, user.id)
+        await unstarMessage(messageId, user.id, organizationId)
       } else {
-        await starMessage(messageId, user.id)
+        await starMessage(messageId, user.id, organizationId)
       }
       // Refresh messages to update star status
       if (selectedChannel?.id) {
@@ -434,7 +436,7 @@ const handleReply = useCallback((message: Message) => {
       console.error('Error toggling star:', error)
       Alert.alert('Error', 'Failed to update star status')
     }
-  }, [user?.id, selectedChannel?.id, loadMessages])
+  }, [user?.id, organizationId, selectedChannel?.id, loadMessages])
 
   const handlePinMessage = useCallback(async (messageId: string) => {
     if (!user?.id || !selectedChannel?.id) return
@@ -483,11 +485,17 @@ const handleReply = useCallback((message: Message) => {
 
 
   // Loading state - this is a conditional return, which is allowed
-  if (!hasUserChecked || loading) {
+  if (!hasUserChecked || loading || tenantLoading || !organizationId) {
     return (
       <SafeAreaView style={styles.container}>
         <LoadingState 
-          message={!user ? 'Waiting for authentication...' : 'Loading conversations...'}
+          message={
+            !user
+              ? 'Waiting for authentication...'
+              : !organizationId
+                ? 'Loading organization context...'
+                : 'Loading conversations...'
+          }
         />
       </SafeAreaView>
     )
@@ -639,6 +647,7 @@ const handleReply = useCallback((message: Message) => {
                 visible={showConvertToTaskModal}
                 message={messageToConvert}
                 currentUserId={user.id}
+                organizationId={organizationId}
                 channelMembers={channelMembers}
                 onClose={() => {
                   setShowConvertToTaskModal(false)
@@ -653,6 +662,7 @@ const handleReply = useCallback((message: Message) => {
                 visible={showMeetingModal}
                 message={messageForMeeting}
                 currentUserId={user.id}
+                organizationId={organizationId}
                 channelMembers={channelMembers}
                 channelId={selectedChannel?.id}
                 onClose={() => {
@@ -822,6 +832,7 @@ const handleReply = useCallback((message: Message) => {
         visible={showConvertToTaskModal}
         message={messageToConvert}
         currentUserId={user?.id || ''}
+        organizationId={organizationId}
         channelMembers={channelMembers}
         onClose={() => {
           setShowConvertToTaskModal(false)
@@ -836,6 +847,7 @@ const handleReply = useCallback((message: Message) => {
         visible={showMeetingModal}
         message={messageForMeeting}
         currentUserId={user?.id || ''}
+        organizationId={organizationId}
         channelMembers={channelMembers}
         channelId={selectedChannel?.id}
         onClose={() => {

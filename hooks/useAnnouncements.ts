@@ -2,19 +2,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { Announcement } from '../types/announcement'
-import { useAuth } from './useAuth'
 
-export const useAnnouncements = () => {
+export const useAnnouncements = (
+  organizationId: string | undefined,
+  userId: string | undefined
+) => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(false)
-  const { user } = useAuth()
 
-  // Use useCallback to prevent unnecessary re-renders
   const fetchAnnouncements = useCallback(async () => {
+    if (!organizationId) return
     try {
       setLoading(true)
-      console.log('Fetching announcements...')
-      
+
       const { data, error } = await supabase
         .from('announcements')
         .select(`
@@ -32,9 +32,11 @@ export const useAnnouncements = () => {
           attachments:announcement_attachments(*),
           announcement_reads!left(
             id,
-            read_at
+            read_at,
+            user_id
           )
         `)
+        .eq('organization_id', organizationId)
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -43,43 +45,41 @@ export const useAnnouncements = () => {
       }
 
       if (data) {
-        console.log(`Fetched ${data.length} announcements`)
-        
         const announcementsWithDetails = await Promise.all(
           data.map(async (item) => {
-            // Fetch reactions
             const { data: reactions, error: reactionsError } = await supabase
               .from('announcement_reactions')
               .select('*')
               .eq('announcement_id', item.id)
+              .eq('organization_id', organizationId)
 
             if (reactionsError) {
               console.error('Error fetching reactions:', reactionsError)
             }
 
-            // Fetch user's read receipt
             const { data: readReceipt, error: readError } = await supabase
               .from('announcement_reads')
               .select('*')
               .eq('announcement_id', item.id)
-              .eq('user_id', user?.id)
+              .eq('organization_id', organizationId)
+              .eq('user_id', userId)
               .single()
 
             if (readError && readError.code !== 'PGRST116') {
               console.error('Error fetching read receipt:', readError)
             }
 
-            // Fetch read count
             const { count: readCount, error: countError } = await supabase
               .from('announcement_reads')
               .select('*', { count: 'exact', head: true })
               .eq('announcement_id', item.id)
+              .eq('organization_id', organizationId)
 
             if (countError) {
               console.error('Error fetching read count:', countError)
             }
 
-            const userHasReacted = reactions?.some(r => r.user_id === user?.id) || false
+            const userHasReacted = reactions?.some(r => r.user_id === userId) || false
 
             return {
               id: item.id,
@@ -117,7 +117,7 @@ export const useAnnouncements = () => {
     } finally {
       setLoading(false)
     }
-  }, [user?.id]) // Add user.id as dependency
+  }, [organizationId, userId])
 
   useEffect(() => {
     fetchAnnouncements()

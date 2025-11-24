@@ -11,6 +11,7 @@ import { HomeStackNavigator } from './navigators/HomeStackNavigator'
 
 // Import our hooks and components
 import { useAuth, AuthProvider } from './hooks/useAuth'
+import { TenantProvider, useTenant } from './hooks/useTenant'
 import Auth from './components/Auth'
 
 // Import our screens
@@ -20,6 +21,7 @@ import TasksScreen from './screens/TasksScreen'
 import AnnouncementsScreen from './screens/AnnouncementsScreen'
 import ProfileScreen from './screens/ProfileScreen'
 import AdminScreen from './screens/AdminScreen'
+import OrganizationSetupScreen from './screens/OrganizationSetupScreen'
 
 const Tab = createBottomTabNavigator()
 
@@ -160,9 +162,18 @@ function TabNavigator() {
 }
 
 function AppContent() {
-  const { user, loading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
+  const { organizationId, loading: tenantLoading } = useTenant()
 
-  if (loading) {
+  console.log('📱 AppContent render:', {
+    user: user?.email,
+    authLoading,
+    tenantLoading,
+    organizationId,
+  })
+
+  // Show loading only while auth or tenant is loading
+  if (authLoading || tenantLoading) {
     return (
       <View style={{ 
         flex: 1, 
@@ -183,15 +194,39 @@ function AppContent() {
     )
   }
 
+  // Not logged in - show auth
+  if (!user) {
+    console.log('👤 No user - showing Auth')
+    return (
+      <>
+        <StatusBar style="auto" />
+        <NavigationContainer>
+          <Auth />
+        </NavigationContainer>
+      </>
+    )
+  }
+
+  // Logged in but no organization - show setup
+  if (!organizationId) {
+    console.log('🏢 No organization - showing OrganizationSetupScreen')
+    return (
+      <>
+        <StatusBar style="auto" />
+        <NavigationContainer>
+          <OrganizationSetupScreen />
+        </NavigationContainer>
+      </>
+    )
+  }
+
+  // Has everything - show main app
+  console.log('✅ Showing main app with organization:', organizationId)
   return (
     <>
       <StatusBar style="auto" />
       <NavigationContainer>
-        {user ? (
-          <TabNavigator />
-        ) : (
-          <Auth />
-        )}
+        <TabNavigator />
       </NavigationContainer>
     </>
   )
@@ -272,11 +307,13 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <AppInitializer>
-          <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-            <AppContent />
-          </SafeAreaView>
-        </AppInitializer>
+        <TenantProvider>
+          <AppInitializer>
+            <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+              <AppContent />
+            </SafeAreaView>
+          </AppInitializer>
+        </TenantProvider>
       </AuthProvider>
     </SafeAreaProvider>
   )

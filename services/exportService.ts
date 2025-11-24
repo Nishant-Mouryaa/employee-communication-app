@@ -7,6 +7,9 @@ import { ExportOptions } from '../types/announcement'
 export const exportService = {
   async exportToCSV(options: ExportOptions) {
     try {
+      if (!options.organizationId) {
+        throw new Error('Organization context is required for exports')
+      }
       console.log('Starting CSV export with options:', options)
       
       // Build the base query
@@ -25,6 +28,7 @@ export const exportService = {
             count
           )
         `)
+        .eq('organization_id', options.organizationId)
 
       // Add optional joins based on options
       if (options.includeComments) {
@@ -143,6 +147,9 @@ export const exportService = {
 
   async exportToJSON(options: ExportOptions) {
     try {
+      if (!options.organizationId) {
+        throw new Error('Organization context is required for exports')
+      }
       console.log('Starting JSON export with options:', options)
       
       // Build base query - use separate queries to avoid complex joins
@@ -160,6 +167,7 @@ export const exportService = {
             color
           )
         `)
+        .eq('organization_id', options.organizationId)
 
       // Apply filters
       if (options.dateRange) {
@@ -197,6 +205,7 @@ export const exportService = {
             )
           `)
           .in('announcement_id', announcementIds)
+          .eq('organization_id', options.organizationId)
 
         if (!commentsError && comments) {
           // Group comments by announcement
@@ -224,6 +233,7 @@ export const exportService = {
           .from('announcement_analytics')
           .select('*')
           .in('announcement_id', announcementIds)
+          .eq('organization_id', options.organizationId)
 
         if (!analyticsError && analytics) {
           // Group analytics by announcement
@@ -251,6 +261,7 @@ export const exportService = {
           .from('announcement_attachments')
           .select('*')
           .in('announcement_id', announcementIds)
+          .eq('organization_id', options.organizationId)
 
         if (!attachmentsError && attachments) {
           // Group attachments by announcement

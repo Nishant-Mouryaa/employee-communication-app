@@ -22,6 +22,7 @@ interface MeetingInviteModalProps {
   visible: boolean
   message: Message | null
   currentUserId: string
+  organizationId?: string | null
   channelMembers: Map<string, Profile>
   channelId?: string
   onClose: () => void
@@ -32,6 +33,7 @@ export const MeetingInviteModal: React.FC<MeetingInviteModalProps> = ({
   visible,
   message,
   currentUserId,
+  organizationId,
   channelMembers,
   channelId,
   onClose,
@@ -64,6 +66,11 @@ export const MeetingInviteModal: React.FC<MeetingInviteModalProps> = ({
       return
     }
 
+    if (!organizationId) {
+      Alert.alert('Error', 'Organization context missing. Please try again.')
+      return
+    }
+
     if (startDate >= endDate) {
       Alert.alert('Error', 'End time must be after start time')
       return
@@ -83,7 +90,7 @@ export const MeetingInviteModal: React.FC<MeetingInviteModalProps> = ({
         reminder_minutes: [15, 60],
       }
 
-      const meeting = await createMeetingFromMessage(message, currentUserId, inviteData)
+      const meeting = await createMeetingFromMessage(message, currentUserId, organizationId, inviteData)
 
       Alert.alert(
         'Meeting Created',

@@ -32,13 +32,16 @@ import { AnalyticsDashboard } from '../components/announcements/AnalyticsDashboa
 import { VersionHistoryModal } from '../components/announcements/VersionHistoryModal'
 import { ExportModal } from '../components/announcements/ExportModal'
 import { LanguageModal } from '../components/announcements/LanguageModal'
+import { OrganizationSwitcher } from '../components/common/OrganizationSwitcher'
+import { useTenant } from '../hooks/useTenant'
 import { Announcement } from '../types/announcement'
 
 export default function AnnouncementsScreen() {
   const { user } = useAuth()
+  const { organizationId, loading: tenantLoading } = useTenant()
   const { userRole } = useUserRole()
-  const { announcements, loading, fetchAnnouncements } = useAnnouncements()
-  const { categories } = useCategories()
+  const { announcements, loading, fetchAnnouncements } = useAnnouncements(organizationId, user?.id)
+  const { categories } = useCategories(organizationId)
   const { t } = useLanguage()
   const {
     filters,
@@ -70,29 +73,29 @@ export default function AnnouncementsScreen() {
   }, [announcements])
 
   // Enhanced real-time subscription with better error handling
-  useRealtimeAnnouncements(() => {
+  useRealtimeAnnouncements(organizationId, () => {
     console.log('Real-time update triggered, refreshing announcements...')
     fetchAnnouncements()
   })
 
   const handleMarkAsRead = async (announcementId: string) => {
-    if (user) {
+    if (user && organizationId) {
       const readTime = readStartTime > 0 ? Math.floor((Date.now() - readStartTime) / 1000) : 0
-      await announcementService.markAsRead(announcementId, user.id)
-      await analyticsService.trackView(announcementId, user.id, readTime)
+      await announcementService.markAsRead(announcementId, user.id, organizationId)
+      await analyticsService.trackView(announcementId, user.id, organizationId, readTime)
     }
   }
 
 // Update your handlers to immediately refresh data
   const handleToggleReaction = async (announcementId: string) => {
-    if (!user) {
+    if (!user || !organizationId) {
       Alert.alert(t('common.error'), 'You must be logged in to react')
       return
     }
     
     try {
-      await announcementService.toggleReaction(announcementId, user.id)
-      await analyticsService.logActivity(user.id, announcementId, 'reaction')
+      await announcementService.toggleReaction(announcementId, user.id, organizationId)
+      await analyticsService.logActivity(user.id, announcementId, organizationId, 'reaction')
       // Force immediate refresh
       fetchAnnouncements()
     } catch (error) {
@@ -105,7 +108,8 @@ export default function AnnouncementsScreen() {
       Alert.alert(t('common.error'), 'You do not have permission to pin announcements')
       return
     }
-    await announcementService.togglePin(announcementId, currentPinStatus)
+    if (!organizationId) return
+    await announcementService.togglePin(announcementId, currentPinStatus, organizationId)
   }
 
   const handleEdit = (announcement: Announcement) => {
@@ -114,6 +118,7 @@ export default function AnnouncementsScreen() {
   }
 
   const handleDelete = async (announcementId: string, authorId: string) => {
+    if (!organizationId) return
     if (!userRole.canDeleteAll && user?.id !== authorId) {
       Alert.alert(t('common.error'), 'You can only delete your own announcements')
       return
@@ -130,7 +135,7 @@ export default function AnnouncementsScreen() {
           onPress: async () => {
             try {
               setSubmitting(true)
-              await announcementService.deleteAnnouncement(announcementId)
+              await announcementService.deleteAnnouncement(announcementId, organizationId)
               Alert.alert(t('common.success'), 'Announcement deleted successfully')
             } catch (error: any) {
               Alert.alert(t('common.error'), error.message || 'Failed to delete announcement')
@@ -144,7 +149,7 @@ export default function AnnouncementsScreen() {
   }
 
  const handleSubmit = async (formData: any) => {
-    if (!user) {
+    if (!user || !organizationId) {
       Alert.alert(t('common.error'), 'You must be logged in')
       return
     }
@@ -163,10 +168,10 @@ export default function AnnouncementsScreen() {
           return
         }
         
-        await announcementService.updateAnnouncement(editingAnnouncement.id, formData)
+        await announcementService.updateAnnouncement(editingAnnouncement.id, formData, organizationId)
         Alert.alert(t('common.success'), 'Announcement updated successfully!')
       } else {
-        const data = await announcementService.createAnnouncement(formData, user.id)
+        const data = await announcementService.createAnnouncement(formData, user.id, organizationId)
         Alert.alert(t('common.success'), 'Announcement posted successfully!')
       }
       
@@ -182,7 +187,7 @@ export default function AnnouncementsScreen() {
 
 
   const handleSchedule = async (scheduledAt: Date, expiresAt?: Date) => {
-    if (!user || !userRole.canSchedule) {
+    if (!user || !userRole.canSchedule || !organizationId) {
       Alert.alert(t('common.error'), 'You do not have permission to schedule announcements')
       return
     }
@@ -236,8 +241,18 @@ export default function AnnouncementsScreen() {
 
 
 
+  if (tenantLoading || !organizationId) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>{t('common.loading')}</Text>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.container}>
+      <OrganizationSwitcher />
 <AnnouncementHeader 
   onAddAnnouncementPress={() => setModalVisible(true)}
   onFiltersChange={(newFilters) => {

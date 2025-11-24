@@ -1,5 +1,5 @@
 // components/announcements/ExportModal.tsx
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useCategories } from '../../hooks/useCategories'
 import { exportService } from '../../services/exportService'
 import { ExportOptions, ExportFormat } from '../../types/announcement'
 import { useLanguage } from '../../hooks/useLanguage'
+import { useTenant } from '../../hooks/useTenant'
 
 interface ExportModalProps {
   visible: boolean
@@ -24,7 +25,8 @@ interface ExportModalProps {
 
 export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) => {
   const { t } = useLanguage()
-  const { categories } = useCategories()
+  const { organizationId } = useTenant()
+  const { categories } = useCategories(organizationId)
   const [exporting, setExporting] = useState(false)
   const [showStartPicker, setShowStartPicker] = useState(false)
   const [showEndPicker, setShowEndPicker] = useState(false)
@@ -38,8 +40,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
     includeComments: true,
     includeAnalytics: true,
     includeAttachments: false,
-    categories: []
+    categories: [],
+    organizationId: organizationId || ''
   })
+
+  useEffect(() => {
+    if (organizationId) {
+      setOptions(prev => ({ ...prev, organizationId }))
+    }
+  }, [organizationId])
 
   const exportFormats: ExportFormat[] = [
     { type: 'pdf', label: t('export.pdf'), icon: '📄' },
@@ -64,6 +73,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
   }
 
   const handleExport = async () => {
+    if (!organizationId) {
+      Alert.alert(t('common.error'), 'Organization context not available')
+      return
+    }
     try {
       setExporting(true)
 

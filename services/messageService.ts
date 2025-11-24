@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { Message, MessageAttachment } from '../types/chat'
 import { getMessageReactions } from './reactionService'
 
-export const fetchMessages = async (channelId: string, userId?: string) => {
+export const fetchMessages = async (channelId: string, userId: string | undefined, organizationId: string) => {
   const { data: messages, error } = await supabase
     .from('chat_messages')
     .select(`
@@ -18,6 +18,8 @@ export const fetchMessages = async (channelId: string, userId?: string) => {
       )
     `)
     .eq('channel_id', channelId)
+    .eq('channel_id', channelId)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -42,6 +44,7 @@ export const fetchMessages = async (channelId: string, userId?: string) => {
         )
       `)
       .in('id', replyIds)
+      .eq('organization_id', organizationId)
     
     replies?.forEach(reply => {
       replyMessages.set(reply.id, reply)
@@ -54,6 +57,7 @@ export const fetchMessages = async (channelId: string, userId?: string) => {
     .from('chat_message_reads')
     .select('message_id, user_id')
     .in('message_id', messageIds)
+    .eq('organization_id', organizationId)
 
   if (readsError) {
     console.error('Error fetching read receipts:', readsError)
@@ -73,6 +77,7 @@ export const fetchMessages = async (channelId: string, userId?: string) => {
       .select('message_id')
       .eq('user_id', userId)
       .in('message_id', messages.map(m => m.id))
+      .eq('organization_id', organizationId)
     
     starredMessageIds = new Set(bookmarks?.map(b => b.message_id) || [])
   }
@@ -117,6 +122,7 @@ export const sendMessage = async (
   content: string,
   channelId: string,
   userId: string,
+  organizationId: string,
   replyToId?: string,
   attachments?: MessageAttachment[]
 ): Promise<Message> => {
@@ -145,7 +151,7 @@ export const sendMessage = async (
   
   try {
     const { getComplianceSettings } = await import('./complianceService')
-    const settings = await getComplianceSettings()
+    const settings = await getComplianceSettings(organizationId)
     
     if (settings?.encryption_enabled) {
       const { generateEncryptionKey, encryptMessage } = await import('../utils/encryption')
@@ -164,7 +170,8 @@ export const sendMessage = async (
     mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null,
     attachments: attachments && attachments.length > 0 ? attachments : null,
     encryption_key: encryptionKey, // Store key for decryption (in production, use proper key management)
-    is_encrypted: !!encryptionKey
+    is_encrypted: !!encryptionKey,
+    organization_id: organizationId,
   }
 
   if (replyToId) {
@@ -202,6 +209,7 @@ export const sendMessage = async (
         )
       `)
       .eq('id', data.reply_to)
+      .eq('organization_id', organizationId)
       .single()
     
     replyMessage = replyData
@@ -233,18 +241,23 @@ export const deleteMessage = async (messageId: string, userId: string): Promise<
 export const updateMessage = async (
   messageId: string,
   newContent: string,
-  userId: string
+  userId: string,
+  organizationId: string
 ): Promise<Message> => {
   // First verify the user owns this message
   const { data: existingMessage, error: fetchError } = await supabase
     .from('chat_messages')
-    .select('user_id')
+    .select('user_id, organization_id')
     .eq('id', messageId)
     .single()
 
   if (fetchError) throw fetchError
   if (existingMessage.user_id !== userId) {
     throw new Error('Unauthorized: You can only edit your own messages')
+  }
+
+  if (existingMessage.organization_id !== organizationId) {
+    throw new Error('Unauthorized organization context')
   }
 
   // Update the message
@@ -284,6 +297,7 @@ export const updateMessage = async (
         )
       `)
       .eq('id', data.reply_to)
+      .eq('organization_id', organizationId)
       .single()
     
     replyMessage = replyData
@@ -297,6 +311,7 @@ export const updateMessage = async (
     .from('chat_message_reads')
     .select('user_id')
     .eq('message_id', messageId)
+    .eq('organization_id', organizationId)
 
   const readBy = reads?.map(r => r.user_id) || []
 

@@ -2,22 +2,22 @@
 import { useState, useCallback, useRef } from 'react'
 import { Alert } from 'react-native'
 import { Channel, Message, ChatState, Reaction, MessageAttachment } from '../types/chat'
-import { 
-  fetchChannels, 
+import {
+  fetchChannels,
   fetchChannelUnreadCounts,
   addUserToDefaultChannels,
-  fetchChannelMembers
+  fetchChannelMembers,
 } from '../services/channelService'
-import { 
+import {
   fetchDirectMessageChannels,
-  createOrGetDirectMessageChannel 
+  createOrGetDirectMessageChannel,
 } from '../services/directMessageService' // Add this import
 import { fetchMessages, sendMessage as sendMessageAPI, deleteMessage as deleteMessageAPI } from '../services/messageService'
 import { markMessagesAsRead } from '../services/readReceiptService'
 import { sanitizeMessage } from '../utils/chatHelpers'
 import { updateMessage as updateMessageAPI } from '../services/messageService'
 
-export const useChatData = (userId: string | undefined) => {
+export const useChatData = (userId: string | undefined, organizationId: string | undefined) => {
   const [state, setState] = useState<ChatState>({
     channels: [],
     selectedChannel: null,
@@ -33,7 +33,7 @@ export const useChatData = (userId: string | undefined) => {
 
 
 const loadChannels = useCallback(async () => {
-  if (!userId || fetchingRef.current) {
+  if (!userId || !organizationId || fetchingRef.current) {
     setState(prev => ({ ...prev, loading: false }))
     return
   }
@@ -43,15 +43,15 @@ const loadChannels = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true }))
     
     // Fetch regular channels
-    let channelsData = await fetchChannels(userId)
+    let channelsData = await fetchChannels(userId, organizationId)
     
     if (channelsData.length === 0) {
-      await addUserToDefaultChannels(userId)
-      channelsData = await fetchChannels(userId)
+      await addUserToDefaultChannels(userId, organizationId)
+      channelsData = await fetchChannels(userId, organizationId)
     }
 
     // Fetch DM channels
-    const dmChannels = await fetchDirectMessageChannels(userId)
+    const dmChannels = await fetchDirectMessageChannels(userId, organizationId)
     
     // Combine channels
     const allChannels = [...channelsData, ...dmChannels]
@@ -62,7 +62,7 @@ const loadChannels = useCallback(async () => {
     )
 
     const channelIds = uniqueChannels.map(ch => ch.id)
-    const unreadCounts = await fetchChannelUnreadCounts(userId, channelIds)
+    const unreadCounts = await fetchChannelUnreadCounts(userId, channelIds, organizationId)
 
     const channelsWithUnread = uniqueChannels.map(channel => ({
       ...channel,
@@ -83,7 +83,7 @@ const loadChannels = useCallback(async () => {
     setState(prev => ({ ...prev, loading: false }))
     fetchingRef.current = false
   }
-}, [userId])
+}, [userId, organizationId])
 
   const selectChannel = useCallback((channel: Channel | null) => {
     if (!channel) {
@@ -106,133 +106,141 @@ const loadChannels = useCallback(async () => {
   }, [])
 
   // Add a new function specifically for creating/opening DMs
-  const createDirectMessage = useCallback(async (
-    targetUserId: string,
-    targetProfile: any
-  ) => {
-    if (!userId) return null
+  const createDirectMessage = useCallback(
+    async (targetUserId: string, targetProfile: any) => {
+      if (!userId || !organizationId) return null
 
-    try {
-      setState(prev => ({ ...prev, loading: true }))
-      
-      const dmChannel = await createOrGetDirectMessageChannel(
-        userId,
-        targetUserId,
-        targetProfile
-      )
+      try {
+        setState(prev => ({ ...prev, loading: true }))
 
-      // Reload channels to include the new DM
-      await loadChannels()
-      
-      // Select the DM channel
-      selectChannel(dmChannel)
-      
-      // Load messages for the DM
-      if (dmChannel.id) {
-        await loadMessages(dmChannel.id)
-        await loadChannelMembers(dmChannel.id)
+        const dmChannel = await createOrGetDirectMessageChannel(
+          userId,
+          targetUserId,
+          targetProfile,
+          organizationId
+        )
+
+        // Reload channels to include the new DM
+        await loadChannels()
+
+        // Select the DM channel
+        selectChannel(dmChannel)
+
+        // Load messages for the DM
+        if (dmChannel.id) {
+          await loadMessages(dmChannel.id)
+          await loadChannelMembers(dmChannel.id)
+        }
+
+        return dmChannel
+      } catch (error) {
+        console.error('Error creating direct message:', error)
+        Alert.alert('Error', 'Failed to start direct message')
+        return null
+      } finally {
+        setState(prev => ({ ...prev, loading: false }))
+      }
+    },
+    [userId, organizationId, loadChannels, selectChannel, loadMessages, loadChannelMembers]
+  )
+  
+  const loadMessages = useCallback(
+    async (channelId: string) => {
+      if (!userId || !organizationId) return
+
+      try {
+        const messagesData = await fetchMessages(channelId, userId, organizationId)
+        setState(prev => ({ ...prev, messages: messagesData }))
+        await markMessagesAsRead(channelId, userId, organizationId)
+      } catch (error) {
+        console.error('Error fetching messages:', error)
+        Alert.alert('Error', 'Failed to load messages')
+      }
+    },
+    [userId, organizationId]
+  )
+
+  const loadChannelMembers = useCallback(
+    async (channelId: string) => {
+      if (!organizationId) return
+      try {
+        const members = await fetchChannelMembers(channelId, organizationId)
+        setState(prev => ({ ...prev, channelMembers: members }))
+      } catch (error) {
+        console.error('Error fetching channel members:', error)
+      }
+    },
+    [organizationId]
+  )
+
+  const sendMessage = useCallback(
+    async (
+      content: string,
+      replyToId?: string,
+      attachments: MessageAttachment[] = []
+    ) => {
+      if (!userId || !organizationId || !state.selectedChannel) return null
+
+      const sanitized = sanitizeMessage(content)
+      if (!sanitized && attachments.length === 0) return null
+
+      // Find the reply message if replyToId is provided
+      const replyMessage = replyToId ? state.messages.find(msg => msg.id === replyToId) : undefined
+
+      // Create optimistic message
+      const optimisticMessage: Message = {
+        id: `temp-${Date.now()}`,
+        content: sanitized,
+        channel_id: state.selectedChannel.id,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        profiles: {
+          id: userId,
+          username: 'You',
+          full_name: 'You',
+        },
+        read_by: [],
+        read_count: 0,
+        reactions: [],
+        reply_to: replyToId,
+        reply_message: replyMessage,
+        attachments,
       }
 
-      return dmChannel
-    } catch (error) {
-      console.error('Error creating direct message:', error)
-      Alert.alert('Error', 'Failed to start direct message')
-      return null
-    } finally {
-      setState(prev => ({ ...prev, loading: false }))
-    }
-  }, [userId, loadChannels, selectChannel, loadMessages, loadChannelMembers])
-  
-  const loadMessages = useCallback(async (channelId: string) => {
-    if (!userId) return
-
-    try {
-      const messagesData = await fetchMessages(channelId, userId)
-      setState(prev => ({ ...prev, messages: messagesData }))
-      await markMessagesAsRead(channelId, userId)
-    } catch (error) {
-      console.error('Error fetching messages:', error)
-      Alert.alert('Error', 'Failed to load messages')
-    }
-  }, [userId])
-
-  const loadChannelMembers = useCallback(async (channelId: string) => {
-    try {
-      const members = await fetchChannelMembers(channelId)
-      setState(prev => ({ ...prev, channelMembers: members }))
-    } catch (error) {
-      console.error('Error fetching channel members:', error)
-    }
-  }, [])
-
-  const sendMessage = useCallback(async (
-    content: string,
-    replyToId?: string,
-    attachments: MessageAttachment[] = []
-  ) => {
-    if (!userId || !state.selectedChannel) return null
-
-    const sanitized = sanitizeMessage(content)
-    if (!sanitized && attachments.length === 0) return null
-
-    // Find the reply message if replyToId is provided
-    const replyMessage = replyToId 
-      ? state.messages.find(msg => msg.id === replyToId)
-      : undefined
-
-    // Create optimistic message
-    const optimisticMessage: Message = {
-      id: `temp-${Date.now()}`,
-      content: sanitized,
-      channel_id: state.selectedChannel.id,
-      user_id: userId,
-      created_at: new Date().toISOString(),
-      profiles: {
-        id: userId,
-        username: 'You',
-        full_name: 'You',
-      },
-      read_by: [],
-      read_count: 0,
-      reactions: [],
-      reply_to: replyToId,
-      reply_message: replyMessage,
-      attachments
-    }
-
-    setState(prev => ({ 
-      ...prev, 
-      messages: [...prev.messages, optimisticMessage],
-      sending: true 
-    }))
-
-    try {
-      const sentMessage = await sendMessageAPI(
-        sanitized, 
-        state.selectedChannel.id, 
-        userId,
-        replyToId,
-        attachments
-      )
-      
       setState(prev => ({
         ...prev,
-        messages: prev.messages.map(msg => 
-          msg.id === optimisticMessage.id ? sentMessage : msg
-        ),
-        sending: false
+        messages: [...prev.messages, optimisticMessage],
+        sending: true,
       }))
 
-      return sentMessage
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        messages: prev.messages.filter(msg => msg.id !== optimisticMessage.id),
-        sending: false
-      }))
-      throw error
-    }
-  }, [userId, state.selectedChannel, state.messages])
+      try {
+        const sentMessage = await sendMessageAPI(
+          sanitized,
+          state.selectedChannel.id,
+          userId,
+          organizationId,
+          replyToId,
+          attachments
+        )
+
+        setState(prev => ({
+          ...prev,
+          messages: prev.messages.map(msg => (msg.id === optimisticMessage.id ? sentMessage : msg)),
+          sending: false,
+        }))
+
+        return sentMessage
+      } catch (error) {
+        setState(prev => ({
+          ...prev,
+          messages: prev.messages.filter(msg => msg.id !== optimisticMessage.id),
+          sending: false,
+        }))
+        throw error
+      }
+    },
+    [userId, organizationId, state.selectedChannel, state.messages]
+  )
 
   const deleteMessage = useCallback(async (messageId: string) => {
     if (!userId) return
@@ -329,16 +337,14 @@ const loadChannels = useCallback(async () => {
   }, [])
 
   const editMessage = useCallback(async (messageId: string, newContent: string) => {
-    if (!userId) return
+    if (!userId || !organizationId) return
 
     try {
-      const updatedMessage = await updateMessageAPI(messageId, newContent, userId)
-      
+      const updatedMessage = await updateMessageAPI(messageId, newContent, userId, organizationId)
+
       setState(prev => ({
         ...prev,
-        messages: prev.messages.map(msg =>
-          msg.id === messageId ? updatedMessage : msg
-        )
+        messages: prev.messages.map(msg => (msg.id === messageId ? updatedMessage : msg)),
       }))
 
       return updatedMessage
@@ -347,7 +353,7 @@ const loadChannels = useCallback(async () => {
       Alert.alert('Error', 'Failed to edit message')
       throw error
     }
-  }, [userId])
+  }, [userId, organizationId])
 
   return {
     ...state,

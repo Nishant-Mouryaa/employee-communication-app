@@ -14,6 +14,7 @@ import { useNotificationSettings } from '../../hooks/useNotificationSettings'
 import { useCategories } from '../../hooks/useCategories'
 import { notificationService } from '../../services/notificationService'
 import { useAuth } from '../../hooks/useAuth'
+import { useTenant } from '../../hooks/useTenant'
 
 interface NotificationSettingsModalProps {
   visible: boolean
@@ -25,8 +26,9 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
   onClose
 }) => {
   const { user } = useAuth()
-  const { settings, loading, updateSettings } = useNotificationSettings()
-  const { categories } = useCategories()
+  const { organizationId } = useTenant()
+  const { settings, loading, updateSettings } = useNotificationSettings(organizationId)
+  const { categories } = useCategories(organizationId)
   const [hasPermission, setHasPermission] = useState(false)
 
   useEffect(() => {
@@ -34,10 +36,10 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
   }, [visible])
 
   const checkPermissions = async () => {
-    if (!user) return
+    if (!user || !organizationId) return
     
     try {
-      const token = await notificationService.registerForPushNotifications(user.id)
+      const token = await notificationService.registerForPushNotifications(user.id, organizationId)
       setHasPermission(!!token)
     } catch (error) {
       setHasPermission(false)
@@ -67,7 +69,7 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
     }
   }
 
-  if (loading || !settings) {
+  if (!organizationId || loading || !settings) {
     return null
   }
 

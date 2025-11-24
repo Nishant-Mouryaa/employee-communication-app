@@ -13,6 +13,7 @@ export interface AccessPolicy {
   restricted_departments?: string[]
   created_at: string
   updated_at: string
+  organization_id: string
 }
 
 export interface ChannelAccessControl {
@@ -40,6 +41,7 @@ export interface ComplianceSettings {
   encryption_enabled: boolean
   audit_logging_enabled: boolean
   gdpr_compliant: boolean
+  organization_id: string
 }
 
 export interface AuditLog {
@@ -50,6 +52,7 @@ export interface AuditLog {
   resource_id?: string
   details?: Record<string, any>
   ip_address?: string
+  organization_id: string
   created_at: string
 }
 

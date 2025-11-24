@@ -3,20 +3,25 @@ import { useState, useEffect } from 'react'
 import { analyticsService } from '../services/analyticsService'
 import { AnalyticsSummary } from '../types/announcement'
 
-export const useAnalytics = (startDate: Date, endDate: Date) => {
+export const useAnalytics = (
+  organizationId: string | undefined,
+  startDate: Date,
+  endDate: Date
+) => {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null)
   const [chartData, setChartData] = useState<any[]>([])
   const [topAnnouncements, setTopAnnouncements] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
 
   const fetchAnalytics = async () => {
+    if (!organizationId) return
     try {
       setLoading(true)
 
       const [summaryData, chartResult, topResult] = await Promise.all([
-        analyticsService.getAnalyticsSummary(startDate, endDate),
-        analyticsService.getChartData(startDate, endDate),
-        analyticsService.getTopAnnouncements(10, startDate, endDate)
+        analyticsService.getAnalyticsSummary(organizationId, startDate, endDate),
+        analyticsService.getChartData(organizationId, startDate, endDate),
+        analyticsService.getTopAnnouncements(organizationId, 10, startDate, endDate)
       ])
 
       setSummary(summaryData)
@@ -31,7 +36,7 @@ export const useAnalytics = (startDate: Date, endDate: Date) => {
 
   useEffect(() => {
     fetchAnalytics()
-  }, [startDate, endDate])
+  }, [organizationId, startDate, endDate])
 
   return { summary, chartData, topAnnouncements, loading, refetch: fetchAnalytics }
 }

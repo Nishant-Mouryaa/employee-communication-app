@@ -5,7 +5,8 @@ import { Channel, Profile } from '../types/chat'
 export const createOrGetDirectMessageChannel = async (
   currentUserId: string,
   targetUserId: string,
-  targetProfile: Profile
+  targetProfile: Profile,
+  organizationId: string
 ): Promise<Channel> => {
   console.log('=== createOrGetDirectMessageChannel ===')
   
@@ -31,6 +32,7 @@ export const createOrGetDirectMessageChannel = async (
       .from('channels')
       .select('*')
       .eq('name', dmChannelName)
+      .eq('organization_id', organizationId)
       .limit(1)
     
     console.log('Search result:', existingChannels)
@@ -60,15 +62,16 @@ export const createOrGetDirectMessageChannel = async (
         .from('channel_members')
         .select('user_id')
         .eq('channel_id', channel.id)
+        .eq('organization_id', organizationId)
       
       const memberIds = new Set(existingMembers?.map(m => m.user_id) || [])
       const membersToAdd = []
       
       if (!memberIds.has(currentUserId)) {
-        membersToAdd.push({ channel_id: channel.id, user_id: currentUserId })
+        membersToAdd.push({ channel_id: channel.id, user_id: currentUserId, organization_id: organizationId })
       }
       if (!memberIds.has(targetUserId)) {
-        membersToAdd.push({ channel_id: channel.id, user_id: targetUserId })
+        membersToAdd.push({ channel_id: channel.id, user_id: targetUserId, organization_id: organizationId })
       }
       
       if (membersToAdd.length > 0) {
@@ -95,7 +98,8 @@ export const createOrGetDirectMessageChannel = async (
         {
           name: dmChannelName,
           description: `Direct message with ${targetProfile.full_name || targetProfile.username}`,
-          type: 'direct'
+          type: 'direct',
+          organization_id: organizationId,
         }
       ])
       .select()
@@ -112,13 +116,14 @@ export const createOrGetDirectMessageChannel = async (
           .from('channels')
           .select('*')
           .eq('name', dmChannelName)
+          .eq('organization_id', organizationId)
           .single()
         
         if (justCreatedChannel) {
           // Add current user as member
           await supabase
             .from('channel_members')
-            .insert([{ channel_id: justCreatedChannel.id, user_id: currentUserId }])
+            .insert([{ channel_id: justCreatedChannel.id, user_id: currentUserId, organization_id: organizationId }])
             .select()
           
           return {
@@ -139,8 +144,8 @@ export const createOrGetDirectMessageChannel = async (
     const { error: memberError } = await supabase
       .from('channel_members')
       .insert([
-        { channel_id: newChannel.id, user_id: currentUserId },
-        { channel_id: newChannel.id, user_id: targetUserId }
+        { channel_id: newChannel.id, user_id: currentUserId, organization_id: organizationId },
+        { channel_id: newChannel.id, user_id: targetUserId, organization_id: organizationId }
       ])
 
     if (memberError) {
@@ -163,7 +168,10 @@ export const createOrGetDirectMessageChannel = async (
   }
 }
 
-export const fetchDirectMessageChannels = async (userId: string): Promise<Channel[]> => {
+export const fetchDirectMessageChannels = async (
+  userId: string,
+  organizationId: string
+): Promise<Channel[]> => {
   console.log('=== fetchDirectMessageChannels ===')
   console.log('User ID:', userId)
   
@@ -178,6 +186,8 @@ export const fetchDirectMessageChannels = async (userId: string): Promise<Channe
         channels!inner(*)
       `)
       .eq('user_id', userId)
+      .eq('organization_id', organizationId)
+      .eq('channels.organization_id', organizationId)
     
     if (memberError) {
       console.error('Error fetching member channels:', memberError)

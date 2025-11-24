@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase'
 
 export const markMessagesAsRead = async (
   channelId: string,
-  userId: string
+  userId: string,
+  organizationId: string
 ): Promise<void> => {
   const { data: unreadMessages, error: unreadError } = await supabase
     .from('chat_messages')
     .select('id')
     .eq('channel_id', channelId)
+    .eq('organization_id', organizationId)
     .neq('user_id', userId)
 
   if (unreadError || !unreadMessages?.length) return
@@ -18,6 +20,7 @@ export const markMessagesAsRead = async (
     .select('message_id')
     .eq('user_id', userId)
     .in('message_id', unreadMessages.map(msg => msg.id))
+    .eq('organization_id', organizationId)
 
   const existingReadIds = new Set(existingReads?.map(read => read.message_id) || [])
   const newReads = unreadMessages
@@ -25,7 +28,8 @@ export const markMessagesAsRead = async (
     .map(msg => ({
       message_id: msg.id,
       user_id: userId,
-      read_at: new Date().toISOString()
+      read_at: new Date().toISOString(),
+      organization_id: organizationId,
     }))
 
   if (newReads.length > 0) {
@@ -39,14 +43,16 @@ export const markMessagesAsRead = async (
 
 export const markMessageAsRead = async (
   messageId: string,
-  userId: string
+  userId: string,
+  organizationId: string
 ): Promise<void> => {
   const { error } = await supabase
     .from('chat_message_reads')
     .upsert({
       message_id: messageId,
       user_id: userId,
-      read_at: new Date().toISOString()
+      read_at: new Date().toISOString(),
+      organization_id: organizationId,
     }, { 
       onConflict: 'message_id,user_id'
     })

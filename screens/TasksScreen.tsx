@@ -1,15 +1,16 @@
   // screens/TasksScreen.tsx
   import React, { useState, useEffect, useCallback } from 'react'
   import { View, StyleSheet, TouchableOpacity, Text, Alert, ActivityIndicator, Linking } from 'react-native'
-  import { useAuth } from '../hooks/useAuth'
-  import { useTaskData } from '../hooks/useTaskData'
-  import { useTaskRealtime } from '../hooks/useTaskRealtime'
-  import { useDocumentPicker } from '../hooks/useDocumentPicker'
+import { useAuth } from '../hooks/useAuth'
+import { useTenant } from '../hooks/useTenant'
+import { useTaskData } from '../hooks/useTaskData'
+import { useTaskRealtime } from '../hooks/useTaskRealtime'
+import { useDocumentPicker } from '../hooks/useDocumentPicker'
   import { TaskWithLabels, NewTaskForm, TaskAttachment } from '../types/tasks'
   import { getNextStatus } from '../utils/taskHelpers'
   import { downloadAttachment } from '../services/taskAttachmentService'
   import { MAX_FILE_SIZE } from '../constants/tasks'
-  import {
+import {
     TaskHeader,
     TaskFilters,
     TaskList,
@@ -17,9 +18,11 @@
     TaskDetailsModal,
     LabelSelector
   } from '../components/tasks'
+import { OrganizationSwitcher } from '../components/common/OrganizationSwitcher'
 
   export default function TasksScreen() {
     const { user } = useAuth()
+  const { organizationId, loading: tenantLoading } = useTenant()
     const [showAddModal, setShowAddModal] = useState(false)
     const [showTaskDetails, setShowTaskDetails] = useState(false)
     const [showUserSelector, setShowUserSelector] = useState(false)
@@ -53,7 +56,7 @@
       removeComment,
       uploadTaskAttachment,
       removeAttachment,
-    } = useTaskData(user?.id)
+    } = useTaskData(user?.id, organizationId)
 
     const { pickDocument, selectedFiles, addFile, removeFile, clearFiles } = useDocumentPicker()
 
@@ -71,6 +74,7 @@
     // Setup realtime subscriptions
     useTaskRealtime({
       userId: user?.id,
+      organizationId,
       onTasksChange: loadTasks,
       onAttachmentsChange: loadAttachments,
       onCommentsChange: loadComments
@@ -78,22 +82,23 @@
 
     // Initial data fetch
     useEffect(() => {
-      if (user) {
+      if (user && organizationId) {
         loadTasks()
         loadUsers()
         loadLabels()
       }
-    }, [user, loadTasks, loadUsers, loadLabels])
+    }, [user, organizationId, loadTasks, loadUsers, loadLabels])
 
     // Load attachments and comments when tasks change
     useEffect(() => {
+      if (!organizationId) return
       if (tasks.length > 0) {
         tasks.forEach(task => {
           loadAttachments(task.id)
           loadComments(task.id)
         })
       }
-    }, [tasks.length])
+    }, [tasks.length, organizationId, loadAttachments, loadComments])
 
     const handleAddTask = useCallback(async () => {
       if (!newTask.title.trim() || !user) return
@@ -311,18 +316,21 @@
       }))
     }, [])
 
-    if (loading && tasks.length === 0) {
+    if (tenantLoading || !organizationId || (loading && tasks.length === 0)) {
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#6366F1" />
-          <Text style={styles.loadingText}>Loading tasks...</Text>
+          <Text style={styles.loadingText}>
+            {tenantLoading || !organizationId ? 'Loading organization...' : 'Loading tasks...'}
+          </Text>
         </View>
       )
     }
 
     return (
       <View style={styles.container}>
-     <TaskHeader onAddTaskPress={() => setShowAddModal(true)} />
+        <OrganizationSwitcher />
+        <TaskHeader onAddTaskPress={() => setShowAddModal(true)} />
 
         <TaskFilters activeFilter={filter} onFilterChange={setFilter} />
 

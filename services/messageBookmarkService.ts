@@ -5,7 +5,7 @@ import { Message } from '../types/chat'
 /**
  * Star/save a message for personal reference
  */
-export const starMessage = async (messageId: string, userId: string): Promise<void> => {
+export const starMessage = async (messageId: string, userId: string, organizationId: string): Promise<void> => {
   try {
     const { error } = await supabase
       .from('message_bookmarks')
@@ -14,6 +14,7 @@ export const starMessage = async (messageId: string, userId: string): Promise<vo
           message_id: messageId,
           user_id: userId,
           created_at: new Date().toISOString(),
+          organization_id: organizationId,
         },
         { onConflict: 'message_id,user_id' }
       )
@@ -28,13 +29,14 @@ export const starMessage = async (messageId: string, userId: string): Promise<vo
 /**
  * Unstar a message
  */
-export const unstarMessage = async (messageId: string, userId: string): Promise<void> => {
+export const unstarMessage = async (messageId: string, userId: string, organizationId: string): Promise<void> => {
   try {
     const { error } = await supabase
       .from('message_bookmarks')
       .delete()
       .eq('message_id', messageId)
       .eq('user_id', userId)
+      .eq('organization_id', organizationId)
 
     if (error) throw error
   } catch (error) {
@@ -46,7 +48,7 @@ export const unstarMessage = async (messageId: string, userId: string): Promise<
 /**
  * Get all starred messages for a user
  */
-export const getStarredMessages = async (userId: string): Promise<Message[]> => {
+export const getStarredMessages = async (userId: string, organizationId: string): Promise<Message[]> => {
   try {
     const { data, error } = await supabase
       .from('message_bookmarks')
@@ -70,6 +72,7 @@ export const getStarredMessages = async (userId: string): Promise<Message[]> => 
         )
       `)
       .eq('user_id', userId)
+      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
 
     if (error) throw error
@@ -87,13 +90,14 @@ export const getStarredMessages = async (userId: string): Promise<Message[]> => 
 /**
  * Check if a message is starred by user
  */
-export const isMessageStarred = async (messageId: string, userId: string): Promise<boolean> => {
+export const isMessageStarred = async (messageId: string, userId: string, organizationId: string): Promise<boolean> => {
   try {
     const { data, error } = await supabase
       .from('message_bookmarks')
       .select('id')
       .eq('message_id', messageId)
       .eq('user_id', userId)
+      .eq('organization_id', organizationId)
       .single()
 
     if (error && error.code !== 'PGRST116') throw error // PGRST116 = no rows returned

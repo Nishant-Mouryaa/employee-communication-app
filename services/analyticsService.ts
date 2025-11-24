@@ -3,12 +3,18 @@ import { supabase } from '../lib/supabase'
 import { AnnouncementAnalytics, AnalyticsSummary, UserActivityLog } from '../types/announcement'
 
 export const analyticsService = {
-  async trackView(announcementId: string, userId: string, readTime: number = 0) {
+  async trackView(
+    announcementId: string,
+    userId: string,
+    organizationId: string,
+    readTime: number = 0
+  ) {
     try {
       const { error } = await supabase.rpc('track_announcement_view', {
         p_announcement_id: announcementId,
         p_user_id: userId,
-        p_read_time: readTime
+        p_read_time: readTime,
+        p_organization_id: organizationId,
       })
 
       if (error) throw error
@@ -20,6 +26,7 @@ export const analyticsService = {
   async logActivity(
     userId: string,
     announcementId: string,
+    organizationId: string,
     activityType: UserActivityLog['activity_type'],
     metadata?: Record<string, any>
   ) {
@@ -30,7 +37,8 @@ export const analyticsService = {
           user_id: userId,
           announcement_id: announcementId,
           activity_type: activityType,
-          metadata: metadata || {}
+          metadata: metadata || {},
+          organization_id: organizationId,
         })
 
       if (error) throw error
@@ -39,11 +47,16 @@ export const analyticsService = {
     }
   },
 
-  async getAnalyticsSummary(startDate: Date, endDate: Date): Promise<AnalyticsSummary | null> {
+  async getAnalyticsSummary(
+    organizationId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<AnalyticsSummary | null> {
     try {
       const { data, error } = await supabase.rpc('get_analytics_summary', {
         p_start_date: startDate.toISOString().split('T')[0],
-        p_end_date: endDate.toISOString().split('T')[0]
+        p_end_date: endDate.toISOString().split('T')[0],
+        p_organization_id: organizationId,
       })
 
       if (error) throw error
@@ -54,12 +67,16 @@ export const analyticsService = {
     }
   },
 
-  async getAnnouncementAnalytics(announcementId: string): Promise<AnnouncementAnalytics[]> {
+  async getAnnouncementAnalytics(
+    announcementId: string,
+    organizationId: string
+  ): Promise<AnnouncementAnalytics[]> {
     try {
       const { data, error } = await supabase
         .from('announcement_analytics')
         .select('*')
         .eq('announcement_id', announcementId)
+        .eq('organization_id', organizationId)
         .order('date', { ascending: true })
 
       if (error) throw error
@@ -70,7 +87,12 @@ export const analyticsService = {
     }
   },
 
-  async getTopAnnouncements(limit: number = 10, startDate?: Date, endDate?: Date) {
+  async getTopAnnouncements(
+    organizationId: string,
+    limit: number = 10,
+    startDate?: Date,
+    endDate?: Date
+  ) {
     try {
       let query = supabase
         .from('announcement_analytics')
@@ -81,6 +103,7 @@ export const analyticsService = {
           reaction_count,
           comment_count
         `)
+        .eq('organization_id', organizationId)
         .order('view_count', { ascending: false })
         .limit(limit)
 
@@ -101,13 +124,18 @@ export const analyticsService = {
     }
   },
 
-  async getChartData(startDate: Date, endDate: Date) {
+  async getChartData(
+    organizationId: string,
+    startDate: Date,
+    endDate: Date
+  ) {
     try {
       const { data, error } = await supabase
         .from('announcement_analytics')
         .select('date, view_count, reaction_count, comment_count')
         .gte('date', startDate.toISOString().split('T')[0])
         .lte('date', endDate.toISOString().split('T')[0])
+        .eq('organization_id', organizationId)
         .order('date', { ascending: true })
 
       if (error) throw error
@@ -137,7 +165,11 @@ export const analyticsService = {
     }
   },
 
-  async getUserActivity(userId: string, limit: number = 50) {
+  async getUserActivity(
+    userId: string,
+    organizationId: string,
+    limit: number = 50
+  ) {
     try {
       const { data, error } = await supabase
         .from('user_activity_logs')
@@ -146,6 +178,7 @@ export const analyticsService = {
           announcements!inner(id, title)
         `)
         .eq('user_id', userId)
+        .eq('organization_id', organizationId)
         .order('created_at', { ascending: false })
         .limit(limit)
 

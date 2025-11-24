@@ -63,7 +63,7 @@ export default function Auth() {
         return
       }
 
-      // If signup successful, create profile
+      // If signup successful, create profile (without organization_id - will be set during org setup)
       if (authData.user) {
         const { error: profileError } = await supabase
           .from('profiles')
@@ -75,6 +75,7 @@ export default function Auth() {
               department: department.trim(),
               position: position.trim(),
               avatar_url: null,
+              // organization_id will be set when user creates/joins an organization
             }
           ])
 
@@ -250,6 +251,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subtitle: {
+    
     fontSize: 16,
     color: 'rgba(255, 255, 255, 0.8)',
   },
@@ -278,10 +280,12 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   toggleText: {
+    marginBottom: 40, 
     color: '#6b7280',
     marginRight: 5,
   },
   toggleButton: {
+    marginBottom: 40, 
     color: '#6366F1',
     fontWeight: '600',
   },

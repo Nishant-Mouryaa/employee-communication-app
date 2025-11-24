@@ -7,6 +7,7 @@ export const commentService = {
     announcementId: string,
     userId: string,
     content: string,
+    organizationId: string,
     parentId?: string
   ) {
     try {
@@ -16,7 +17,8 @@ export const commentService = {
           announcement_id: announcementId,
           user_id: userId,
           content: content.trim(),
-          parent_id: parentId || null
+          parent_id: parentId || null,
+          organization_id: organizationId,
         })
         .select(`
           *,
@@ -36,7 +38,7 @@ export const commentService = {
     }
   },
 
-  async updateComment(commentId: string, content: string) {
+  async updateComment(commentId: string, content: string, organizationId: string) {
     try {
       const { data, error } = await supabase
         .from('announcement_comments')
@@ -46,6 +48,7 @@ export const commentService = {
           updated_at: new Date().toISOString()
         })
         .eq('id', commentId)
+        .eq('organization_id', organizationId)
         .select()
         .single()
 
@@ -57,12 +60,13 @@ export const commentService = {
     }
   },
 
-  async deleteComment(commentId: string) {
+  async deleteComment(commentId: string, organizationId: string) {
     try {
       const { error } = await supabase
         .from('announcement_comments')
         .delete()
         .eq('id', commentId)
+        .eq('organization_id', organizationId)
 
       if (error) throw error
     } catch (error) {

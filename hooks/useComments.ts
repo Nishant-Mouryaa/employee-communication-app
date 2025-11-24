@@ -3,11 +3,12 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { Comment } from '../types/announcement'
 
-export const useComments = (announcementId: string) => {
+export const useComments = (announcementId: string, organizationId: string | undefined) => {
   const [comments, setComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(false)
 
   const fetchComments = async () => {
+    if (!organizationId) return
     try {
       setLoading(true)
       const { data, error } = await supabase
@@ -21,6 +22,7 @@ export const useComments = (announcementId: string) => {
           )
         `)
         .eq('announcement_id', announcementId)
+        .eq('organization_id', organizationId)
         .is('parent_id', null)
         .order('created_at', { ascending: false })
 
@@ -40,6 +42,7 @@ export const useComments = (announcementId: string) => {
               )
             `)
             .eq('parent_id', comment.id)
+            .eq('organization_id', organizationId)
             .order('created_at', { ascending: true })
 
           return {
@@ -60,10 +63,10 @@ export const useComments = (announcementId: string) => {
   }
 
   useEffect(() => {
-    if (announcementId) {
+    if (announcementId && organizationId) {
       fetchComments()
     }
-  }, [announcementId])
+  }, [announcementId, organizationId])
 
   return { comments, loading, fetchComments }
 }

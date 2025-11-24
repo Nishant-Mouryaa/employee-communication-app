@@ -2,11 +2,15 @@
 import { supabase } from '../lib/supabase'
 import { TaskAttachment, SelectedFile } from '../types/tasks'
 
-export const fetchAttachments = async (taskId: string): Promise<TaskAttachment[]> => {
+export const fetchAttachments = async (
+  taskId: string,
+  organizationId: string
+): Promise<TaskAttachment[]> => {
   const { data, error } = await supabase
     .from('task_attachments')
     .select('*')
     .eq('task_id', taskId)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -16,7 +20,8 @@ export const fetchAttachments = async (taskId: string): Promise<TaskAttachment[]
 export const uploadAttachment = async (
   file: SelectedFile,
   taskId: string,
-  userId: string
+  userId: string,
+  organizationId: string
 ): Promise<void> => {
   const response = await fetch(file.uri)
   if (!response.ok) {
@@ -45,7 +50,8 @@ export const uploadAttachment = async (
       file_path: filePath,
       file_size: file.size,
       file_type: file.mimeType || 'application/octet-stream',
-      uploaded_by: userId
+      uploaded_by: userId,
+      organization_id: organizationId,
     })
 
   if (dbError) {
@@ -67,7 +73,8 @@ export const downloadAttachment = async (attachment: TaskAttachment): Promise<st
 
 export const deleteAttachment = async (
   attachmentId: string,
-  filePath: string
+  filePath: string,
+  organizationId: string
 ): Promise<void> => {
   const { error: storageError } = await supabase.storage
     .from('attachments')
@@ -79,6 +86,7 @@ export const deleteAttachment = async (
     .from('task_attachments')
     .delete()
     .eq('id', attachmentId)
+    .eq('organization_id', organizationId)
 
   if (dbError) throw dbError
 }

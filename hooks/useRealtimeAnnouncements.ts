@@ -2,52 +2,49 @@
 import { useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-export const useRealtimeAnnouncements = (onUpdate: () => void) => {
+export const useRealtimeAnnouncements = (
+  organizationId: string | undefined,
+  onUpdate: () => void
+) => {
   useEffect(() => {
+    if (!organizationId) return
+
     const subscription = supabase
-      .channel('announcements-changes')
+      .channel(`announcements-${organizationId}`)
       .on(
         'postgres_changes',
         { 
           event: '*', 
           schema: 'public', 
-          table: 'announcements' 
+          table: 'announcements',
+          filter: `organization_id=eq.${organizationId}`
         },
-        (payload) => {
-          console.log('Announcements change:', payload)
-          onUpdate()
-        }
+        onUpdate
       )
       .on(
         'postgres_changes',
         { 
           event: '*', 
           schema: 'public', 
-          table: 'announcement_reactions' 
+          table: 'announcement_reactions',
+          filter: `organization_id=eq.${organizationId}`
         },
-        (payload) => {
-          console.log('Reactions change:', payload)
-          onUpdate()
-        }
+        onUpdate
       )
       .on(
         'postgres_changes',
         { 
           event: '*', 
           schema: 'public', 
-          table: 'announcement_reads' 
+          table: 'announcement_reads',
+          filter: `organization_id=eq.${organizationId}`
         },
-        (payload) => {
-          console.log('Reads change:', payload)
-          onUpdate()
-        }
+        onUpdate
       )
-      .subscribe((status) => {
-        console.log('Realtime subscription status:', status)
-      })
+      .subscribe()
 
     return () => {
       subscription.unsubscribe()
     }
-  }, [onUpdate])
+  }, [organizationId, onUpdate])
 }

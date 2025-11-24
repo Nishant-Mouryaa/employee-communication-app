@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { Channel, ChannelMember, Profile } from '../types/chat'
 import { DEFAULT_CHANNELS } from '../constants/chat'
 
-export const fetchChannels = async (userId: string): Promise<Channel[]> => {
+export const fetchChannels = async (userId: string, organizationId: string): Promise<Channel[]> => {
   const { data: memberChannels, error } = await supabase
     .from('channel_members')
     .select(`
@@ -11,6 +11,8 @@ export const fetchChannels = async (userId: string): Promise<Channel[]> => {
       channels!inner(*)
     `)
     .eq('user_id', userId)
+    .eq('organization_id', organizationId)
+    .eq('channels.organization_id', organizationId)
     .neq('channels.type', 'direct')
 
   if (error) throw error
@@ -24,6 +26,7 @@ export const fetchChannels = async (userId: string): Promise<Channel[]> => {
         .from('channel_members')
         .select('*', { count: 'exact', head: true })
         .eq('channel_id', channel.id)
+        .eq('organization_id', organizationId)
       
       return {
         ...channel,
@@ -37,17 +40,20 @@ export const fetchChannels = async (userId: string): Promise<Channel[]> => {
 
 export const fetchChannelUnreadCounts = async (
   userId: string,
-  channelIds: string[]
+  channelIds: string[],
+  organizationId: string
 ): Promise<Record<string, number>> => {
   const [readMessages, allMessages] = await Promise.all([
     supabase
       .from('chat_message_reads')
       .select('message_id')
-      .eq('user_id', userId),
+      .eq('user_id', userId)
+      .eq('organization_id', organizationId),
     supabase
       .from('chat_messages')
       .select('id, channel_id, user_id')
       .in('channel_id', channelIds)
+      .eq('organization_id', organizationId)
       .neq('user_id', userId)
   ])
 
@@ -63,38 +69,110 @@ export const fetchChannelUnreadCounts = async (
   }, {} as Record<string, number>)
 }
 
-export const createDefaultChannels = async (userId: string): Promise<void> => {
-  const channelsWithUser = DEFAULT_CHANNELS.map(ch => ({
-    ...ch,
-    created_by: userId
-  }))
+export const createDefaultChannels = async (userId: string, organizationId: string): Promise<void> => {
+  try {
+    const { data: existing } = await supabase
+      .from('channels')
+      .select('name')
+      .eq('organization_id', organizationId)
+      .in(
+        'name',
+        DEFAULT_CHANNELS.map(ch => ch.name)
+      )
 
-  const { error } = await supabase
-    .from('channels')
-    .upsert(channelsWithUser, { onConflict: 'id' })
+    const existingNames = new Set(existing?.map(ch => ch.name) || [])
 
-  if (error) throw error
+    const channelsToInsert = DEFAULT_CHANNELS.filter(ch => !existingNames.has(ch.name)).map(ch => ({
+      name: ch.name,
+      description: ch.description,
+      created_by: userId,
+      organization_id: organizationId,
+      type: 'channel',
+    }))
+
+    if (channelsToInsert.length === 0) return
+
+    // Insert channels one by one to handle duplicate key errors gracefully
+    for (const channel of channelsToInsert) {
+      try {
+        const { error } = await supabase.from('channels').insert([channel])
+        if (error) {
+          // If it's a duplicate key error, skip it (channel might exist from another org with same name)
+          // This shouldn't happen if the unique constraint is per-org, but handle it anyway
+          if (error.code === '23505') {
+            console.warn(`Channel "${channel.name}" already exists, skipping...`)
+            continue
+          }
+          throw error
+        }
+      } catch (err: any) {
+        // Handle duplicate key errors gracefully
+        if (err?.code === '23505') {
+          console.warn(`Channel "${channel.name}" already exists, skipping...`)
+          continue
+        }
+        throw err
+      }
+    }
+  } catch (error) {
+    // Log but don't throw - channel creation failure shouldn't block org creation
+    console.warn('Error creating default channels:', error)
+    // Don't rethrow - allow organization creation to succeed
+  }
 }
 
-export const addUserToDefaultChannels = async (userId: string): Promise<void> => {
-  await createDefaultChannels(userId)
-  
-  const channelMembers = DEFAULT_CHANNELS.map(ch => ({
-    channel_id: ch.id,
-    user_id: userId
-  }))
+export const addUserToDefaultChannels = async (userId: string, organizationId: string): Promise<void> => {
+  try {
+    // Ensure default channels exist (this is idempotent)
+    await createDefaultChannels(userId, organizationId)
 
-  const { error } = await supabase
-    .from('channel_members')
-    .upsert(channelMembers, { onConflict: 'channel_id,user_id' })
+    // Get all default channels for this organization
+    const { data: channelsInOrg, error: fetchError } = await supabase
+      .from('channels')
+      .select('id, name')
+      .eq('organization_id', organizationId)
+      .in(
+        'name',
+        DEFAULT_CHANNELS.map(ch => ch.name)
+      )
 
-  if (error) throw error
+    if (fetchError) {
+      console.warn('Error fetching channels for user:', fetchError)
+      return
+    }
+
+    const channelMembers = (channelsInOrg || []).map(ch => ({
+      channel_id: ch.id,
+      user_id: userId,
+      organization_id: organizationId,
+    }))
+
+    if (channelMembers.length === 0) {
+      console.warn('No default channels found to add user to')
+      return
+    }
+
+    const { error: upsertError } = await supabase
+      .from('channel_members')
+      .upsert(channelMembers, { onConflict: 'channel_id,user_id' })
+
+    if (upsertError) {
+      console.warn('Error adding user to default channels:', upsertError)
+      // Don't throw - this is not critical
+    }
+  } catch (error) {
+    // Log but don't throw - adding user to channels is not critical for org creation
+    console.warn('Error in addUserToDefaultChannels (non-blocking):', error)
+  }
 }
 
 
 
 
-export const fetchChannelMembers = async (channelId: string): Promise<Map<string, Profile>> => {
+export const fetchChannelMembers = async (
+  channelId: string,
+  organizationId: string
+): Promise<Map<string, Profile>> => {
   const { data, error } = await supabase
     .from('channel_members')
     .select(`
@@ -112,6 +190,7 @@ export const fetchChannelMembers = async (channelId: string): Promise<Map<string
       )
     `)
     .eq('channel_id', channelId)
+    .eq('organization_id', organizationId)
 
   if (error) throw error
 
@@ -138,7 +217,10 @@ export const fetchChannelMembers = async (channelId: string): Promise<Map<string
   return membersMap
 }
 // Add a function to get detailed member info
-export const fetchChannelMembersList = async (channelId: string): Promise<ChannelMember[]> => {
+export const fetchChannelMembersList = async (
+  channelId: string,
+  organizationId: string
+): Promise<ChannelMember[]> => {
   const { data, error } = await supabase
     .from('channel_members')
     .select(`
@@ -158,6 +240,7 @@ export const fetchChannelMembersList = async (channelId: string): Promise<Channe
       )
     `)
     .eq('channel_id', channelId)
+    .eq('organization_id', organizationId)
     .order('joined_at', { ascending: true })
 
   if (error) throw error

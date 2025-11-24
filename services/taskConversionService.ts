@@ -19,6 +19,7 @@ export interface TaskFromMessage {
 export const convertMessageToTask = async (
   message: Message,
   userId: string,
+  organizationId: string,
   taskData?: Partial<TaskFromMessage>
 ): Promise<any> => {
   try {
@@ -37,6 +38,7 @@ export const convertMessageToTask = async (
       description: description.trim(),
       assigned_to: taskData?.assigned_to || userId, // Default to current user
       created_by: userId,
+      organization_id: organizationId,
       due_date: taskData?.due_date || null,
       priority: taskData?.priority || 'medium',
       status: (taskData?.status || 'todo') as 'todo' | 'in-progress' | 'done',
@@ -66,12 +68,16 @@ export const convertMessageToTask = async (
 /**
  * Get tasks created from messages
  */
-export const getTasksFromMessages = async (messageIds: string[]): Promise<Map<string, any>> => {
+export const getTasksFromMessages = async (
+  messageIds: string[],
+  organizationId: string
+): Promise<Map<string, any>> => {
   try {
     const { data, error } = await supabase
       .from('tasks')
       .select('id, title, status, source_message_id')
       .in('source_message_id', messageIds)
+      .eq('organization_id', organizationId)
       .not('source_message_id', 'is', null)
 
     if (error) throw error

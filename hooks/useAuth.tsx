@@ -9,10 +9,10 @@ type AuthContextType = {
   loading: boolean
 }
 
-const AuthContext = createContext<AuthContextType>({ 
-  user: null, 
-  session: null, 
-  loading: true 
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  session: null,
+  loading: true,
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('Error getting initial session:', error)
         }
         
-        console.log('Initial session:', initialSession)
+        console.log('Initial session:', initialSession?.user?.email)
         setSession(initialSession)
         setUser(initialSession?.user ?? null)
         
@@ -75,18 +75,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Function to ensure user has a profile
+  // Function to ensure user has a profile - DO NOT assign organization here
   const ensureUserProfile = async (user: User) => {
     try {
       console.log('Ensuring profile for user:', user.id)
       
       const { data: existingProfile, error: fetchError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, organization_id')
         .eq('id', user.id)
         .single()
 
-      // If profile doesn't exist or we get an error, create one
       if (fetchError || !existingProfile) {
         console.log('Creating new profile for user...')
         
@@ -102,6 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               department: user.user_metadata?.department || '',
               position: user.user_metadata?.position || '',
               avatar_url: null,
+              organization_id: null, // Always null - user must create/join organization
+              role: null, // No role until they join an organization
               updated_at: new Date().toISOString(),
             }
           ])
@@ -109,10 +110,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (insertError) {
           console.error('Error creating user profile:', insertError)
         } else {
-          console.log('Profile created successfully')
+          console.log('Profile created successfully (no organization)')
         }
       } else {
-        console.log('Profile already exists')
+        console.log('Profile already exists:', {
+          user_id: existingProfile.id,
+          has_org: !!existingProfile.organization_id
+        })
       }
     } catch (error) {
       console.error('Error ensuring user profile:', error)
@@ -124,8 +128,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     loading
   }
-
-  console.log('AuthProvider rendering - user:', user?.email, 'loading:', loading)
 
   return (
     <AuthContext.Provider value={value}>

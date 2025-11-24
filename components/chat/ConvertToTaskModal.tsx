@@ -22,6 +22,7 @@ interface ConvertToTaskModalProps {
   visible: boolean
   message: Message | null
   currentUserId: string
+  organizationId?: string | null
   channelMembers: Map<string, Profile>
   onClose: () => void
   onSuccess?: () => void
@@ -31,6 +32,7 @@ export const ConvertToTaskModal: React.FC<ConvertToTaskModalProps> = ({
   visible,
   message,
   currentUserId,
+  organizationId,
   channelMembers,
   onClose,
   onSuccess,
@@ -61,6 +63,11 @@ export const ConvertToTaskModal: React.FC<ConvertToTaskModalProps> = ({
       return
     }
 
+    if (!organizationId) {
+      Alert.alert('Error', 'Organization context missing. Please try again.')
+      return
+    }
+
     setLoading(true)
     try {
       const taskData: Partial<TaskFromMessage> = {
@@ -71,7 +78,7 @@ export const ConvertToTaskModal: React.FC<ConvertToTaskModalProps> = ({
         due_date: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
       }
 
-      await convertMessageToTask(message, currentUserId, taskData)
+      await convertMessageToTask(message, currentUserId, organizationId, taskData)
       
       Alert.alert('Success', 'Message converted to task successfully!', [
         { text: 'OK', onPress: () => {

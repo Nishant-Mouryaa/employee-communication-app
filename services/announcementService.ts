@@ -3,14 +3,15 @@ import { supabase } from '../lib/supabase'
 import { Alert } from 'react-native'
 
 export const announcementService = {
-  async markAsRead(announcementId: string, userId: string) {
+  async markAsRead(announcementId: string, userId: string, organizationId: string) {
     try {
       const { error } = await supabase
         .from('announcement_reads')
         .upsert({
           announcement_id: announcementId,
           user_id: userId,
-          read_at: new Date().toISOString()
+          read_at: new Date().toISOString(),
+          organization_id: organizationId,
         }, {
           onConflict: 'announcement_id,user_id'
         })
@@ -21,13 +22,14 @@ export const announcementService = {
     }
   },
 
-  async toggleReaction(announcementId: string, userId: string) {
+  async toggleReaction(announcementId: string, userId: string, organizationId: string) {
     try {
       const { data: existingReaction, error: checkError } = await supabase
         .from('announcement_reactions')
         .select('id')
         .eq('announcement_id', announcementId)
         .eq('user_id', userId)
+        .eq('organization_id', organizationId)
         .single()
 
       if (checkError && checkError.code !== 'PGRST116') {
@@ -40,6 +42,7 @@ export const announcementService = {
           .delete()
           .eq('announcement_id', announcementId)
           .eq('user_id', userId)
+          .eq('organization_id', organizationId)
 
         if (deleteError) throw deleteError
       } else {
@@ -48,7 +51,8 @@ export const announcementService = {
           .insert({
             announcement_id: announcementId,
             user_id: userId,
-            reaction_type: 'like'
+            reaction_type: 'like',
+            organization_id: organizationId,
           })
 
         if (insertError) throw insertError
@@ -61,12 +65,13 @@ export const announcementService = {
     }
   },
 
-  async togglePin(announcementId: string, currentPinStatus: boolean) {
+  async togglePin(announcementId: string, currentPinStatus: boolean, organizationId: string) {
     try {
       const { error } = await supabase
         .from('announcements')
         .update({ is_pinned: !currentPinStatus })
         .eq('id', announcementId)
+        .eq('organization_id', organizationId)
 
       if (error) throw error
 
@@ -77,7 +82,7 @@ export const announcementService = {
     }
   },
 
-  async createAnnouncement(announcement: any, userId: string) {
+  async createAnnouncement(announcement: any, userId: string, organizationId: string) {
     try {
       const { data, error } = await supabase
         .from('announcements')
@@ -87,7 +92,8 @@ export const announcementService = {
           author_id: userId,
           is_important: announcement.isImportant,
           is_pinned: announcement.isPinned,
-          category_id: announcement.category_id || null
+          category_id: announcement.category_id || null,
+          organization_id: organizationId,
         }])
         .select()
 
@@ -99,7 +105,7 @@ export const announcementService = {
     }
   },
 
-  async updateAnnouncement(announcementId: string, announcement: any) {
+  async updateAnnouncement(announcementId: string, announcement: any, organizationId: string) {
     try {
       const { error } = await supabase
         .from('announcements')
@@ -112,6 +118,7 @@ export const announcementService = {
           updated_at: new Date().toISOString()
         })
         .eq('id', announcementId)
+        .eq('organization_id', organizationId)
 
       if (error) throw error
     } catch (error) {
@@ -120,27 +127,31 @@ export const announcementService = {
     }
   },
 
-  async deleteAnnouncement(announcementId: string) {
+  async deleteAnnouncement(announcementId: string, organizationId: string) {
     try {
       await supabase
         .from('announcement_reactions')
         .delete()
         .eq('announcement_id', announcementId)
+        .eq('organization_id', organizationId)
 
       await supabase
         .from('announcement_reads')
         .delete()
         .eq('announcement_id', announcementId)
+        .eq('organization_id', organizationId)
 
       await supabase
         .from('announcement_attachments')
         .delete()
         .eq('announcement_id', announcementId)
+        .eq('organization_id', organizationId)
 
       const { error } = await supabase
         .from('announcements')
         .delete()
         .eq('id', announcementId)
+        .eq('organization_id', organizationId)
 
       if (error) throw error
     } catch (error) {
@@ -149,7 +160,7 @@ export const announcementService = {
     }
   },
 
-  async uploadAttachments(announcementId: string, files: File[], userId: string) {
+  async uploadAttachments(announcementId: string, files: File[], userId: string, organizationId: string) {
     try {
       for (const file of files) {
         const fileExt = file.name.split('.').pop()
@@ -173,7 +184,8 @@ export const announcementService = {
             file_url: publicUrl,
             file_type: file.type,
             file_size: file.size,
-            uploaded_by: userId
+            uploaded_by: userId,
+            organization_id: organizationId,
           })
 
         if (dbError) throw dbError

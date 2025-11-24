@@ -26,31 +26,18 @@ export const isAdmin = async (userId: string): Promise<boolean> => {
 /**
  * Create a new channel (admin/manager only)
  */
+// services/adminService.ts - Update the createChannel function
 export const createChannel = async (
   name: string,
   description: string,
   createdBy: string,
-  options?: {
+  organizationId: string,
+  options: {
     isPrivate?: boolean
-    allowedDepartments?: string[]
-    allowedRoles?: UserRole[]
-  }
+    department?: string
+  } = {}
 ): Promise<Channel> => {
   try {
-    // Verify user can create channels
-    const admin = await isAdmin(createdBy)
-    if (!admin) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', createdBy)
-        .single()
-
-      if (profile?.role !== 'manager') {
-        throw new Error('Only admins and managers can create channels')
-      }
-    }
-
     // Create channel
     const { data: channel, error: channelError } = await supabase
       .from('channels')
@@ -59,7 +46,9 @@ export const createChannel = async (
           name,
           description,
           created_by: createdBy,
-          type: 'channel',
+          organization_id: organizationId,
+          is_private: options.isPrivate || false,
+          department: options.department || null,
         },
       ])
       .select()
@@ -67,54 +56,49 @@ export const createChannel = async (
 
     if (channelError) throw channelError
 
-    // Create access control if specified
-    if (options?.isPrivate || options?.allowedDepartments || options?.allowedRoles) {
-      await supabase.from('channel_access_control').insert([
+    // Add creator as member
+    const { error: memberError } = await supabase
+      .from('channel_members')
+      .insert([
         {
           channel_id: channel.id,
-          is_private: options.isPrivate || false,
-          allowed_departments: options.allowedDepartments,
-          allowed_roles: options.allowedRoles,
-          requires_approval: false,
-          created_by: createdBy,
+          user_id: createdBy,
+          role: 'admin',
+          organization_id: organizationId, // Add this
         },
       ])
+
+    if (memberError) {
+      // Rollback channel creation
+      await supabase.from('channels').delete().eq('id', channel.id)
+      throw memberError
     }
 
-    // Add creator as member
-    await supabase.from('channel_members').insert([
-      {
-        channel_id: channel.id,
-        user_id: createdBy,
-      },
-    ])
+    // Log audit event WITH organization_id
+    await logAuditEvent(
+      createdBy,
+      organizationId, // Make sure this is passed
+      'channel_created',
+      { 
+        channel_id: channel.id, 
+        channel_name: name,
+        is_private: options.isPrivate 
+      }
+    )
 
-    // Log audit event
-    await logAuditEvent({
-      user_id: createdBy,
-      action: 'channel_created',
-      resource_type: 'channel',
-      resource_id: channel.id,
-      details: { name, description, options },
-    })
-
-    return {
-      ...channel,
-      unread_count: 0,
-      member_count: 1,
-    }
+    return channel
   } catch (error) {
     console.error('Error creating channel:', error)
     throw error
   }
 }
-
 /**
  * Delete a channel (admin only, or manager who created it)
  */
 export const deleteChannel = async (
   channelId: string,
-  deletedBy: string
+  deletedBy: string,
+  organizationId: string
 ): Promise<void> => {
   try {
     const admin = await isAdmin(deletedBy)
@@ -125,6 +109,7 @@ export const deleteChannel = async (
         .from('channels')
         .select('created_by')
         .eq('id', channelId)
+        .eq('organization_id', organizationId)
         .single()
 
       if (channel?.created_by !== deletedBy) {
@@ -134,10 +119,10 @@ export const deleteChannel = async (
 
     // Delete in order
     await Promise.all([
-      supabase.from('channel_access_control').delete().eq('channel_id', channelId),
-      supabase.from('channel_members').delete().eq('channel_id', channelId),
-      supabase.from('chat_messages').delete().eq('channel_id', channelId),
-      supabase.from('channels').delete().eq('id', channelId),
+      supabase.from('channel_access_control').delete().eq('channel_id', channelId).eq('organization_id', organizationId),
+      supabase.from('channel_members').delete().eq('channel_id', channelId).eq('organization_id', organizationId),
+      supabase.from('chat_messages').delete().eq('channel_id', channelId).eq('organization_id', organizationId),
+      supabase.from('channels').delete().eq('id', channelId).eq('organization_id', organizationId),
     ])
 
     await logAuditEvent({
@@ -145,6 +130,7 @@ export const deleteChannel = async (
       action: 'channel_deleted',
       resource_type: 'channel',
       resource_id: channelId,
+      organization_id: organizationId,
     })
   } catch (error) {
     console.error('Error deleting channel:', error)
@@ -158,7 +144,8 @@ export const deleteChannel = async (
 export const updateUserRole = async (
   userId: string,
   newRole: UserRole,
-  updatedBy: string
+  updatedBy: string,
+  organizationId: string
 ): Promise<void> => {
   try {
     if (!(await isAdmin(updatedBy))) {
@@ -169,6 +156,7 @@ export const updateUserRole = async (
       .from('profiles')
       .update({ role: newRole })
       .eq('id', userId)
+      .eq('organization_id', organizationId)
 
     if (error) throw error
 
@@ -177,6 +165,7 @@ export const updateUserRole = async (
       action: 'user_role_updated',
       resource_type: 'user',
       resource_id: userId,
+      organization_id: organizationId,
       details: { new_role: newRole },
     })
   } catch (error) {
@@ -188,11 +177,12 @@ export const updateUserRole = async (
 /**
  * Get all users (admin only)
  */
-export const getAllUsers = async (): Promise<Profile[]> => {
+export const getAllUsers = async (organizationId: string): Promise<Profile[]> => {
   try {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
+      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
 
     if (error) throw error
@@ -209,7 +199,8 @@ export const getAllUsers = async (): Promise<Profile[]> => {
  */
 export const upsertAccessPolicy = async (
   policy: Partial<AccessPolicy>,
-  createdBy: string
+  createdBy: string,
+  organizationId: string
 ): Promise<AccessPolicy> => {
   try {
     if (!(await isAdmin(createdBy))) {
@@ -223,6 +214,7 @@ export const upsertAccessPolicy = async (
           ...policy,
           is_active: true,
           updated_at: new Date().toISOString(),
+          organization_id: organizationId,
         },
         { onConflict: 'id' }
       )
@@ -236,6 +228,7 @@ export const upsertAccessPolicy = async (
       action: 'access_policy_updated',
       resource_type: 'policy',
       resource_id: data.id,
+      organization_id: organizationId,
       details: policy,
     })
 
@@ -252,7 +245,8 @@ export const upsertAccessPolicy = async (
 export const addUsersToChannel = async (
   channelId: string,
   userIds: string[],
-  addedBy: string
+  addedBy: string,
+  organizationId: string
 ): Promise<void> => {
   try {
     const admin = await isAdmin(addedBy)
@@ -271,6 +265,7 @@ export const addUsersToChannel = async (
     const members = userIds.map(userId => ({
       channel_id: channelId,
       user_id: userId,
+      organization_id: organizationId,
     }))
 
     const { error } = await supabase
@@ -284,6 +279,7 @@ export const addUsersToChannel = async (
       action: 'users_added_to_channel',
       resource_type: 'channel',
       resource_id: channelId,
+      organization_id: organizationId,
       details: { user_ids: userIds },
     })
   } catch (error) {
@@ -298,7 +294,8 @@ export const addUsersToChannel = async (
 export const removeUsersFromChannel = async (
   channelId: string,
   userIds: string[],
-  removedBy: string
+  removedBy: string,
+  organizationId: string
 ): Promise<void> => {
   try {
     const admin = await isAdmin(removedBy)
@@ -318,6 +315,7 @@ export const removeUsersFromChannel = async (
       .from('channel_members')
       .delete()
       .eq('channel_id', channelId)
+      .eq('organization_id', organizationId)
       .in('user_id', userIds)
 
     if (error) throw error
@@ -327,6 +325,7 @@ export const removeUsersFromChannel = async (
       action: 'users_removed_from_channel',
       resource_type: 'channel',
       resource_id: channelId,
+      organization_id: organizationId,
       details: { user_ids: userIds },
     })
   } catch (error) {
@@ -338,11 +337,12 @@ export const removeUsersFromChannel = async (
 /**
  * Get current access policy (admin only)
  */
-export const getAccessPolicy = async (): Promise<AccessPolicy | null> => {
+export const getAccessPolicy = async (organizationId: string): Promise<AccessPolicy | null> => {
   try {
     const { data, error } = await supabase
       .from('access_policies')
       .select('*')
+      .eq('organization_id', organizationId)
       .eq('is_active', true)
       .order('updated_at', { ascending: false })
       .limit(1)

@@ -18,9 +18,12 @@ import { upsertAccessPolicy, getAccessPolicy } from '../services/adminService'
 import { UserRole, ComplianceSettings, AccessPolicy } from '../types/security'
 import { Profile } from '../types/chat'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useTenant } from '../hooks/useTenant'
+import { OrganizationSwitcher } from '../components/common/OrganizationSwitcher'
 
 export default function AdminScreen() {
   const { user } = useAuth()
+  const { organizationId, loading: tenantLoading } = useTenant()
   const [loading, setLoading] = useState(true)
   const [isUserAdmin, setIsUserAdmin] = useState(false)
   const [activeTab, setActiveTab] = useState<'channels' | 'users' | 'policies' | 'compliance' | 'audit'>('channels')
@@ -46,13 +49,13 @@ export default function AdminScreen() {
   const [auditLogs, setAuditLogs] = useState<any[]>([])
 
   useEffect(() => {
-    if (user) {
+    if (user && organizationId) {
       checkAdminAccess()
     }
-  }, [user])
+  }, [user, organizationId])
 
   const checkAdminAccess = async () => {
-    if (!user) return
+    if (!user || !organizationId) return
     
     try {
       const admin = await isAdmin(user.id)
@@ -69,12 +72,13 @@ export default function AdminScreen() {
   }
 
   const loadAdminData = async () => {
+    if (!organizationId) return
     try {
       const [usersData, settings, policy, logs] = await Promise.all([
-        getAllUsers(),
-        getComplianceSettings(),
-        getAccessPolicy(),
-        getAuditLogs(50),
+        getAllUsers(organizationId),
+        getComplianceSettings(organizationId),
+        getAccessPolicy(organizationId),
+        getAuditLogs(organizationId, 50),
       ])
 
        console.log('Users data:', usersData); // Add this line
@@ -105,10 +109,16 @@ export default function AdminScreen() {
     }
 
     try {
+      if (!organizationId) {
+        Alert.alert('Error', 'Organization context not available')
+        return
+      }
+
       await createChannel(
         newChannelName.trim(),
         newChannelDesc.trim(),
         user.id,
+        organizationId,
         {
           isPrivate,
         }
@@ -135,7 +145,8 @@ export default function AdminScreen() {
           text: 'Update',
           onPress: async () => {
             try {
-              await updateUserRole(userId, newRole, user.id)
+      if (!organizationId) return
+      await updateUserRole(userId, newRole, user.id, organizationId)
               await loadAdminData()
               Alert.alert('Success', 'User role updated')
             } catch (error: any) {
@@ -151,13 +162,14 @@ export default function AdminScreen() {
     if (!user) return
 
     try {
+      if (!organizationId) return
       await updateComplianceSettings({
         data_retention_days: retentionDays,
         encryption_enabled: encryptionEnabled,
         auto_delete_enabled: true,
         audit_logging_enabled: true,
         gdpr_compliant: true,
-      })
+      }, organizationId)
       
       Alert.alert('Success', 'Compliance settings updated')
       await loadAdminData()
@@ -170,12 +182,14 @@ export default function AdminScreen() {
     if (!user) return
 
     try {
+      if (!organizationId) return
       await upsertAccessPolicy(
         {
           allow_cross_department: allowCrossDept,
           allow_external: false,
         },
-        user.id
+        user.id,
+        organizationId
       )
       
       Alert.alert('Success', 'Access policy updated')
@@ -187,7 +201,8 @@ export default function AdminScreen() {
 
   const handleExportUserData = async (userId: string) => {
     try {
-      const data = await exportUserData(userId)
+      if (!organizationId) return
+      const data = await exportUserData(userId, organizationId)
       Alert.alert(
         'Data Export',
         `Exported ${Object.keys(data).length} data types for user`,
@@ -199,7 +214,7 @@ export default function AdminScreen() {
     }
   }
 
-  if (loading) {
+  if (loading || tenantLoading || !organizationId) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#6366F1" />
@@ -224,6 +239,9 @@ export default function AdminScreen() {
       <SafeAreaView style={styles.header}>
         <Text style={styles.headerTitle}>Admin Panel</Text>
       </SafeAreaView>
+      <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+        <OrganizationSwitcher />
+      </View>
 
       {/* Tabs */}
       <View style={styles.tabs}>

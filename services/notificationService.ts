@@ -53,7 +53,7 @@ export const notificationService = {
     return await loadNotificationModules()
   },
 
-  async registerForPushNotifications(userId: string) {
+  async registerForPushNotifications(userId: string, organizationId: string) {
     const available = await loadNotificationModules()
     if (!available) {
       console.log('Push notifications not available')
@@ -109,7 +109,8 @@ export const notificationService = {
           user_id: userId,
           token,
           platform: Platform.OS,
-          last_used_at: new Date().toISOString()
+          last_used_at: new Date().toISOString(),
+          organization_id: organizationId,
         }, {
           onConflict: 'token'
         })
@@ -123,6 +124,7 @@ export const notificationService = {
 
   async sendNotification(
     userId: string,
+    organizationId: string,
     title: string,
     body: string,
     data: any
@@ -132,6 +134,7 @@ export const notificationService = {
         .from('notification_queue')
         .insert({
           user_id: userId,
+          organization_id: organizationId,
           announcement_id: data.announcementId,
           type: data.type || 'announcement',
           title,
@@ -145,12 +148,13 @@ export const notificationService = {
     }
   },
 
-  async notifyNewAnnouncement(announcementId: string, title: string) {
+  async notifyNewAnnouncement(announcementId: string, title: string, organizationId: string) {
     try {
       const { data: settings } = await supabase
         .from('notification_settings')
         .select('user_id, new_announcements, important_only')
         .eq('push_enabled', true)
+        .eq('organization_id', organizationId)
 
       if (!settings) return
 
@@ -158,6 +162,7 @@ export const notificationService = {
         if (setting.new_announcements) {
           await this.sendNotification(
             setting.user_id,
+            organizationId,
             'New Announcement',
             title,
             { type: 'new_announcement', announcementId }
@@ -172,6 +177,7 @@ export const notificationService = {
   async notifyCommentReply(
     userId: string,
     announcementId: string,
+    organizationId: string,
     commenterName: string
   ) {
     try {
@@ -179,12 +185,14 @@ export const notificationService = {
         .from('notification_settings')
         .select('comment_replies, push_enabled')
         .eq('user_id', userId)
+        .eq('organization_id', organizationId)
         .eq('push_enabled', true)
         .single()
 
       if (settings?.comment_replies) {
         await this.sendNotification(
           userId,
+          organizationId,
           'New Reply',
           `${commenterName} replied to your comment`,
           { type: 'comment_reply', announcementId }

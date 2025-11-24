@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { useComments } from '../../hooks/useComments'
 import { useAuth } from '../../hooks/useAuth'
+import { useTenant } from '../../hooks/useTenant'
 import { commentService } from '../../services/commentService'
 import { Comment } from '../../types/announcement'
 
@@ -24,7 +25,8 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({
   canComment
 }) => {
   const { user } = useAuth()
-  const { comments, loading, fetchComments } = useComments(announcementId)
+  const { organizationId } = useTenant()
+  const { comments, loading, fetchComments } = useComments(announcementId, organizationId)
   const [newComment, setNewComment] = useState('')
   const [replyTo, setReplyTo] = useState<string | null>(null)
   const [editingComment, setEditingComment] = useState<string | null>(null)
@@ -32,7 +34,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmitComment = async () => {
-    if (!user || !newComment.trim()) return
+    if (!user || !organizationId || !newComment.trim()) return
 
     try {
       setSubmitting(true)
@@ -40,6 +42,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({
         announcementId,
         user.id,
         newComment,
+        organizationId,
         replyTo || undefined
       )
       setNewComment('')
@@ -53,11 +56,11 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({
   }
 
   const handleEditComment = async (commentId: string) => {
-    if (!editContent.trim()) return
+    if (!editContent.trim() || !organizationId) return
 
     try {
       setSubmitting(true)
-      await commentService.updateComment(commentId, editContent)
+      await commentService.updateComment(commentId, editContent, organizationId)
       setEditingComment(null)
       setEditContent('')
       fetchComments()
@@ -69,6 +72,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({
   }
 
   const handleDeleteComment = async (commentId: string) => {
+    if (!organizationId) return
     Alert.alert(
       'Delete Comment',
       'Are you sure you want to delete this comment?',
@@ -79,7 +83,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({
           style: 'destructive',
           onPress: async () => {
             try {
-              await commentService.deleteComment(commentId)
+              await commentService.deleteComment(commentId, organizationId)
               fetchComments()
             } catch (error) {
               Alert.alert('Error', 'Failed to delete comment')

@@ -2,7 +2,10 @@
 import { supabase } from '../lib/supabase'
 import { Task, TaskWithLabels, TaskFilter, NewTaskForm } from '../types/tasks'
 
-export const fetchTasks = async (filter: TaskFilter = 'all'): Promise<TaskWithLabels[]> => {
+export const fetchTasks = async (
+  filter: TaskFilter = 'all',
+  organizationId: string
+): Promise<TaskWithLabels[]> => {
   let query = supabase
     .from('tasks')
     .select(`
@@ -10,6 +13,7 @@ export const fetchTasks = async (filter: TaskFilter = 'all'): Promise<TaskWithLa
       assigned_to_profile:assigned_to (username, full_name),
       created_by_profile:created_by (username, full_name)
     `)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: false })
 
   if (filter !== 'all') {
@@ -30,6 +34,7 @@ export const fetchTasks = async (filter: TaskFilter = 'all'): Promise<TaskWithLa
           task_labels:label_id (id, name, color)
         `)
         .eq('task_id', task.id)
+        .eq('organization_id', organizationId)
 
       const labels = labelData?.map(l => l.task_labels).filter(Boolean) || []
       return { ...task, labels }
@@ -41,7 +46,8 @@ export const fetchTasks = async (filter: TaskFilter = 'all'): Promise<TaskWithLa
 
 export const createTask = async (
   taskData: NewTaskForm,
-  userId: string
+  userId: string,
+  organizationId: string
 ): Promise<Task> => {
   const { data, error } = await supabase
     .from('tasks')
@@ -52,7 +58,8 @@ export const createTask = async (
       created_by: userId,
       due_date: taskData.due_date.toISOString().split('T')[0],
       priority: taskData.priority,
-      status: 'todo' as const
+      status: 'todo' as const,
+      organization_id: organizationId
     }])
     .select()
     .single()
@@ -63,21 +70,24 @@ export const createTask = async (
 
 export const updateTaskStatus = async (
   taskId: string,
-  status: Task['status']
+  status: Task['status'],
+  organizationId: string
 ): Promise<void> => {
   const { error } = await supabase
     .from('tasks')
     .update({ status })
     .eq('id', taskId)
+    .eq('organization_id', organizationId)
 
   if (error) throw error
 }
 
-export const deleteTask = async (taskId: string): Promise<void> => {
+export const deleteTask = async (taskId: string, organizationId: string): Promise<void> => {
   const { error } = await supabase
     .from('tasks')
     .delete()
     .eq('id', taskId)
+    .eq('organization_id', organizationId)
 
   if (error) throw error
 }

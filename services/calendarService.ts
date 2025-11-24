@@ -22,6 +22,7 @@ export interface MeetingInvite {
 export const createMeetingFromMessage = async (
   message: Message,
   userId: string,
+  organizationId: string,
   inviteData: MeetingInvite
 ): Promise<any> => {
   try {
@@ -36,6 +37,7 @@ export const createMeetingFromMessage = async (
       channel_id: inviteData.channel_id || message.channel_id,
       message_id: inviteData.message_id || message.id,
       reminder_minutes: inviteData.reminder_minutes || [15, 60],
+      organization_id: organizationId,
     }
 
     console.log('Creating meeting...');
@@ -60,6 +62,7 @@ export const createMeetingFromMessage = async (
         meeting_id: meetingData.id,
         user_id: attendeeId,
         status: attendeeId === userId ? 'accepted' as const : 'pending' as const,
+        organization_id: organizationId,
       }))
 
       const { error: attendeesError } = await supabase
@@ -161,7 +164,7 @@ export const sendMeetingReminder = async (
 /**
  * Get meetings for a user
  */
-export const getUserMeetings = async (userId: string): Promise<any[]> => {
+export const getUserMeetings = async (userId: string, organizationId: string): Promise<any[]> => {
   try {
     // Fixed query - use the correct relationship name
     const { data, error } = await supabase
@@ -174,6 +177,7 @@ export const getUserMeetings = async (userId: string): Promise<any[]> => {
         )
       `)
       .or(`created_by.eq.${userId},meeting_attendees.user_id.eq.${userId}`)
+      .eq('meetings.organization_id', organizationId)
       .gte('start_time', new Date().toISOString())
       .order('start_time', { ascending: true })
 
@@ -192,6 +196,7 @@ export const getUserMeetings = async (userId: string): Promise<any[]> => {
 export const updateAttendanceStatus = async (
   meetingId: string,
   userId: string,
+  organizationId: string,
   status: 'accepted' | 'declined' | 'tentative'
 ): Promise<void> => {
   try {
@@ -203,6 +208,7 @@ export const updateAttendanceStatus = async (
       })
       .eq('meeting_id', meetingId)
       .eq('user_id', userId)
+      .eq('organization_id', organizationId)
 
     if (error) throw error
   } catch (error) {

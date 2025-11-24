@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 
 interface UseTaskRealtimeProps {
   userId: string | undefined
+  organizationId: string | undefined
   onTasksChange: () => void
   onAttachmentsChange: (taskId: string) => void
   onCommentsChange: (taskId: string) => void
@@ -11,27 +12,33 @@ interface UseTaskRealtimeProps {
 
 export const useTaskRealtime = ({
   userId,
+  organizationId,
   onTasksChange,
   onAttachmentsChange,
-  onCommentsChange
+  onCommentsChange,
 }: UseTaskRealtimeProps) => {
   useEffect(() => {
-    if (!userId) return
+    if (!userId || !organizationId) return
 
     const tasksSubscription = supabase
-      .channel('tasks-changes')
+      .channel(`tasks-changes-${organizationId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
+        { event: '*', schema: 'public', table: 'tasks', filter: `organization_id=eq.${organizationId}` },
         onTasksChange
       )
       .subscribe()
 
     const attachmentsSubscription = supabase
-      .channel('attachments-changes')
+      .channel(`task-attachments-${organizationId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'task_attachments' },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_attachments',
+          filter: `organization_id=eq.${organizationId}`,
+        },
         (payload) => {
           if (payload.new && 'task_id' in payload.new) {
             onAttachmentsChange(payload.new.task_id as string)
@@ -41,10 +48,15 @@ export const useTaskRealtime = ({
       .subscribe()
 
     const commentsSubscription = supabase
-      .channel('comments-changes')
+      .channel(`task-comments-${organizationId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'task_comments' },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'task_comments',
+          filter: `organization_id=eq.${organizationId}`,
+        },
         (payload) => {
           if (payload.new && 'task_id' in payload.new) {
             onCommentsChange(payload.new.task_id as string)
@@ -58,5 +70,5 @@ export const useTaskRealtime = ({
       attachmentsSubscription.unsubscribe()
       commentsSubscription.unsubscribe()
     }
-  }, [userId, onTasksChange, onAttachmentsChange, onCommentsChange])
+  }, [userId, organizationId, onTasksChange, onAttachmentsChange, onCommentsChange])
 }

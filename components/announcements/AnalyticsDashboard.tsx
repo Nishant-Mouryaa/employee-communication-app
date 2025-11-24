@@ -11,11 +11,13 @@ import {
 import { LineChart, BarChart } from 'react-native-chart-kit'
 import { useAnalytics } from '../../hooks/useAnalytics'
 import { useLanguage } from '../../hooks/useLanguage'
+import { useTenant } from '../../hooks/useTenant'
 
 const screenWidth = Dimensions.get('window').width
 
 export const AnalyticsDashboard: React.FC = () => {
   const { t } = useLanguage()
+  const { organizationId } = useTenant()
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d'>('30d')
   
   const getDateRange = () => {
@@ -38,7 +40,7 @@ export const AnalyticsDashboard: React.FC = () => {
   }
 
   const { start, end } = getDateRange()
-  const { summary, chartData, topAnnouncements, loading } = useAnalytics(start, end)
+  const { summary, chartData, topAnnouncements, loading } = useAnalytics(organizationId, start, end)
 
   const chartConfig = {
     backgroundColor: '#ffffff',
@@ -66,6 +68,14 @@ export const AnalyticsDashboard: React.FC = () => {
       </View>
     </View>
   )
+
+  if (!organizationId) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>{t('common.loading')}</Text>
+      </View>
+    )
+  }
 
   if (loading) {
     return (

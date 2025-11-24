@@ -2,11 +2,15 @@
 import { supabase } from '../lib/supabase'
 import { TaskComment } from '../types/tasks'
 
-export const fetchComments = async (taskId: string): Promise<TaskComment[]> => {
+export const fetchComments = async (
+  taskId: string,
+  organizationId: string
+): Promise<TaskComment[]> => {
   const { data: commentsData, error: commentsError } = await supabase
     .from('task_comments')
     .select('*')
     .eq('task_id', taskId)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: true })
 
   if (commentsError) throw commentsError
@@ -44,24 +48,30 @@ export const fetchComments = async (taskId: string): Promise<TaskComment[]> => {
 export const addComment = async (
   taskId: string,
   userId: string,
-  comment: string
+  comment: string,
+  organizationId: string
 ): Promise<void> => {
   const { error } = await supabase
     .from('task_comments')
     .insert({
       task_id: taskId,
       user_id: userId,
-      comment: comment.trim()
+      comment: comment.trim(),
+      organization_id: organizationId,
     })
 
   if (error) throw error
 }
 
-export const deleteComment = async (commentId: string): Promise<void> => {
+export const deleteComment = async (
+  commentId: string,
+  organizationId: string
+): Promise<void> => {
   const { error } = await supabase
     .from('task_comments')
     .delete()
     .eq('id', commentId)
+    .eq('organization_id', organizationId)
 
   if (error) throw error
 }

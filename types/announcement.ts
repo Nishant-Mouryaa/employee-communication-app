@@ -94,6 +94,7 @@ export interface UserRole {
 export interface NotificationSettings {
   id: string
   user_id: string
+  organization_id: string
   new_announcements: boolean
   important_only: boolean
   category_filters: string[]
@@ -202,4 +203,5 @@ export interface ExportOptions {
   includeAnalytics?: boolean
   includeAttachments?: boolean
   categories?: string[]
+  organizationId: string
 }
