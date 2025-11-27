@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { Channel, Profile } from '../types/chat'
 import { UserRole, AccessPolicy, ComplianceSettings } from '../types/security'
 import { logAuditEvent } from './complianceService'
+import { safeLogAuditEvent } from './complianceService'
 
 /**
  * Check if user is admin
@@ -26,7 +27,11 @@ export const isAdmin = async (userId: string): Promise<boolean> => {
 /**
  * Create a new channel (admin/manager only)
  */
-// services/adminService.ts - Update the createChannel function
+
+// services/adminService.ts
+
+// services/adminService.ts
+
 export const createChannel = async (
   name: string,
   description: string,
@@ -38,6 +43,16 @@ export const createChannel = async (
   } = {}
 ): Promise<Channel> => {
   try {
+    if (!organizationId) {
+      throw new Error('Organization ID is required to create a channel')
+    }
+
+    console.log('🏗️ [CREATE_CHANNEL] Starting with:', {
+      name,
+      createdBy,
+      organizationId,
+    })
+
     // Create channel
     const { data: channel, error: channelError } = await supabase
       .from('channels')
@@ -54,7 +69,12 @@ export const createChannel = async (
       .select()
       .single()
 
-    if (channelError) throw channelError
+    if (channelError) {
+      console.error('❌ [CREATE_CHANNEL] Channel insert error:', channelError)
+      throw channelError
+    }
+
+    console.log('✅ [CREATE_CHANNEL] Channel created:', channel.id)
 
     // Add creator as member
     const { error: memberError } = await supabase
@@ -64,31 +84,24 @@ export const createChannel = async (
           channel_id: channel.id,
           user_id: createdBy,
           role: 'admin',
-          organization_id: organizationId, // Add this
+          organization_id: organizationId,
         },
       ])
 
     if (memberError) {
-      // Rollback channel creation
+      console.error('❌ [CREATE_CHANNEL] Failed to add member, rolling back')
       await supabase.from('channels').delete().eq('id', channel.id)
       throw memberError
     }
 
-    // Log audit event WITH organization_id
-    await logAuditEvent(
-      createdBy,
-      organizationId, // Make sure this is passed
-      'channel_created',
-      { 
-        channel_id: channel.id, 
-        channel_name: name,
-        is_private: options.isPrivate 
-      }
-    )
+    console.log('✅ [CREATE_CHANNEL] Member added')
+
+    // REMOVE the explicit audit log call since the trigger handles it
+    // The database trigger log_channel_creation() will automatically create the audit log
 
     return channel
   } catch (error) {
-    console.error('Error creating channel:', error)
+    console.error('💥 [CREATE_CHANNEL] Error:', error)
     throw error
   }
 }
@@ -125,7 +138,7 @@ export const deleteChannel = async (
       supabase.from('channels').delete().eq('id', channelId).eq('organization_id', organizationId),
     ])
 
-    await logAuditEvent({
+    await safeLogAuditEvent({
       user_id: deletedBy,
       action: 'channel_deleted',
       resource_type: 'channel',
@@ -160,7 +173,7 @@ export const updateUserRole = async (
 
     if (error) throw error
 
-    await logAuditEvent({
+    await safeLogAuditEvent({
       user_id: updatedBy,
       action: 'user_role_updated',
       resource_type: 'user',
@@ -361,4 +374,3 @@ export const getAccessPolicy = async (organizationId: string): Promise<AccessPol
     return null
   }
 }
-

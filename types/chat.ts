@@ -99,4 +99,5 @@ export interface ChannelMember {
   channel_id: string
   profiles: Profile
   joined_at: string
+  role?: 'admin' | 'moderator' | 'member' 
 }

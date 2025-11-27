@@ -136,21 +136,8 @@ export const applyDataRetention = async (
 /**
  * Log audit event
  */
-export const logAuditEvent = async (
-  log: Omit<AuditLog, 'id' | 'created_at'> & { organization_id: string }
-): Promise<void> => {
-  try {
-    await supabase.from('audit_logs').insert([
-      {
-        ...log,
-        created_at: new Date().toISOString(),
-      },
-    ])
-  } catch (error) {
-    console.error('Error logging audit event:', error)
-    // Don't throw - audit logging failures shouldn't break the app
-  }
-}
+
+
 
 /**
  * Get compliance settings
@@ -235,3 +222,85 @@ export const getAuditLogs = async (
   }
 }
 
+
+
+/**
+ * Log audit event - FIXED VERSION
+ */
+export const logAuditEvent = async (
+  log: Omit<AuditLog, 'id' | 'created_at'> & { organization_id: string }
+): Promise<void> => {
+  try {
+    console.log('🔍 [AUDIT_LOG] Attempting to log:', {
+      action: log.action,
+      user_id: log.user_id,
+      organization_id: log.organization_id,
+      resource_type: log.resource_type
+    })
+
+    // Validate required fields BEFORE building the object
+    if (!log.organization_id) {
+      console.error('❌ [AUDIT_LOG] Missing organization_id:', log)
+      return // Silently fail but log the error
+    }
+
+    if (!log.action) {
+      console.error('❌ [AUDIT_LOG] Missing action:', log)
+      return
+    }
+
+    if (!log.resource_type) {
+      console.error('❌ [AUDIT_LOG] Missing resource_type:', log)
+      return
+    }
+
+    // Build audit data with explicit field mapping
+    const auditData = {
+      user_id: log.user_id || 'system',
+      action: log.action,
+      resource_type: log.resource_type,
+      resource_id: log.resource_id || null,
+      details: log.details || null,
+      ip_address: log.ip_address || null,
+      organization_id: log.organization_id, // This MUST be present
+      created_at: new Date().toISOString(),
+    }
+
+    console.log('📝 [AUDIT_LOG] Inserting data:', auditData)
+
+    // Double-check before insert
+    if (!auditData.organization_id) {
+      console.error('❌ [AUDIT_LOG] organization_id is null in final data object!')
+      return
+    }
+
+    const { error, data } = await supabase
+      .from('audit_logs')
+      .insert([auditData])
+      .select()
+
+    if (error) {
+      console.error('❌ [AUDIT_LOG] Database error:', error)
+      console.error('❌ [AUDIT_LOG] Failed data:', auditData)
+    } else {
+      console.log('✅ [AUDIT_LOG] Successfully logged:', data)
+    }
+
+  } catch (error) {
+    console.error('💥 [AUDIT_LOG] Unexpected error:', error)
+    // Don't throw - audit logging failures shouldn't break the app
+  }
+}
+
+export const safeLogAuditEvent = async (
+  log: Omit<AuditLog, 'id' | 'created_at'> & { organization_id: string }
+) => {
+  // Extra validation layer
+  if (!log.organization_id) {
+    console.warn('⚠️ [AUDIT_LOG] Missing organization_id in safeLogAuditEvent, skipping')
+    console.warn('⚠️ [AUDIT_LOG] Log object:', log)
+    return
+  }
+  
+  await logAuditEvent(log)
+}

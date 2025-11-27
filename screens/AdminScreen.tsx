@@ -139,36 +139,45 @@ const handleSendInvitation = async () => {
   }
 }
 
-  const handleCreateChannel = async () => {
-    if (!user || !newChannelName.trim()) {
-      Alert.alert('Error', 'Please enter a channel name')
-      return
-    }
-
-    try {
-      if (!organizationId) {
-        Alert.alert('Error', 'Organization context not available')
-        return
-      }
-
-      await createChannel(
-        newChannelName.trim(),
-        newChannelDesc.trim(),
-        user.id,
-        organizationId,
-        {
-          isPrivate,
-        }
-      )
-      
-      Alert.alert('Success', 'Channel created successfully')
-      setNewChannelName('')
-      setNewChannelDesc('')
-      setIsPrivate(false)
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create channel')
-    }
+const handleCreateChannel = async () => {
+  if (!user || !newChannelName.trim()) {
+    Alert.alert('Error', 'Please enter a channel name')
+    return
   }
+
+  // Extra validation
+  if (!organizationId) {
+    Alert.alert('Error', 'Organization context is not available. Please reload the app.')
+    console.error('❌ [ADMIN_SCREEN] organizationId is null when creating channel')
+    return
+  }
+
+  console.log('🎯 [ADMIN_SCREEN] Creating channel with:', {
+    name: newChannelName,
+    userId: user.id,
+    organizationId,
+  })
+
+  try {
+    await createChannel(
+      newChannelName.trim(),
+      newChannelDesc.trim(),
+      user.id,
+      organizationId, // This should never be null due to the check above
+      {
+        isPrivate,
+      }
+    )
+    
+    Alert.alert('Success', 'Channel created successfully')
+    setNewChannelName('')
+    setNewChannelDesc('')
+    setIsPrivate(false)
+  } catch (error: any) {
+    console.error('❌ [ADMIN_SCREEN] Create channel error:', error)
+    Alert.alert('Error', error.message || 'Failed to create channel')
+  }
+}
 
   const handleUpdateUserRole = async (userId: string, newRole: UserRole) => {
     if (!user) return
