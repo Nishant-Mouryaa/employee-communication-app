@@ -26,8 +26,12 @@ export default function AdminScreen() {
   const { organizationId, loading: tenantLoading } = useTenant()
   const [loading, setLoading] = useState(true)
   const [isUserAdmin, setIsUserAdmin] = useState(false)
-  const [activeTab, setActiveTab] = useState<'channels' | 'users' | 'policies' | 'compliance' | 'audit'>('channels')
+ 
   
+  const [activeTab, setActiveTab] = useState<'channels' | 'users' | 'invitations'>('channels')
+const [invitations, setInvitations] = useState<any[]>([])
+const [inviteEmail, setInviteEmail] = useState('')
+const [inviteRole, setInviteRole] = useState<'employee' | 'manager' | 'admin'>('employee')
   // Channel creation
   const [newChannelName, setNewChannelName] = useState('')
   const [newChannelDesc, setNewChannelDesc] = useState('')
@@ -74,13 +78,22 @@ export default function AdminScreen() {
   const loadAdminData = async () => {
     if (!organizationId) return
     try {
-      const [usersData, settings, policy, logs] = await Promise.all([
+      const { getOrganizationInvitations } = await import('../services/invitationService')
+      
+      const [usersData, settings, policy, logs, invites] = await Promise.all([
         getAllUsers(organizationId),
         getComplianceSettings(organizationId),
         getAccessPolicy(organizationId),
         getAuditLogs(organizationId, 50),
+        getOrganizationInvitations(organizationId),
       ])
-
+  
+      setUsers(usersData || [])
+      setComplianceSettings(settings)
+      setAccessPolicy(policy)
+      setAuditLogs(logs)
+      setInvitations(invites)
+      
        console.log('Users data:', usersData); // Add this line
     console.log('Number of users:', usersData?.length); // And this line
     
@@ -101,6 +114,30 @@ export default function AdminScreen() {
       console.error('Error loading admin data:', error)
     }
   }
+
+  // Add invitation handler
+const handleSendInvitation = async () => {
+  if (!inviteEmail.trim() || !user || !organizationId) {
+    Alert.alert('Error', 'Please enter an email address')
+    return
+  }
+
+  try {
+    const { createInvitation } = await import('../services/invitationService')
+    await createInvitation(
+      inviteEmail.trim(),
+      inviteRole,
+      organizationId,
+      user.id
+    )
+    
+    Alert.alert('Success', `Invitation sent to ${inviteEmail}`)
+    setInviteEmail('')
+    await loadAdminData()
+  } catch (error: any) {
+    Alert.alert('Error', error.message || 'Failed to send invitation')
+  }
+}
 
   const handleCreateChannel = async () => {
     if (!user || !newChannelName.trim()) {
@@ -245,7 +282,7 @@ export default function AdminScreen() {
 
       {/* Tabs */}
       <View style={styles.tabs}>
-        {(['channels', 'users'] as const).map(tab => (
+        {(['channels', 'users', 'invitations'] as const).map(tab => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === tab && styles.tabActive]}
@@ -328,6 +365,64 @@ export default function AdminScreen() {
         </View>
       )}
 
+{activeTab === 'invitations' && (
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Invite Users</Text>
+    
+    <TextInput
+      style={styles.input}
+      placeholder="Email address"
+      value={inviteEmail}
+      onChangeText={setInviteEmail}
+      keyboardType="email-address"
+      autoCapitalize="none"
+    /><View style={styles.roleSelector}>
+    {(['employee', 'manager', 'admin'] as const).map(role => (
+      <TouchableOpacity
+        key={role}
+        style={[
+          styles.roleOption,
+          inviteRole === role && styles.roleOptionActive
+        ]}
+        onPress={() => setInviteRole(role)}
+      >
+        <Text style={[
+          styles.roleOptionText,
+          inviteRole === role && styles.roleOptionTextActive
+        ]}>
+          {role.charAt(0).toUpperCase() + role.slice(1)}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+  
+  <TouchableOpacity style={styles.button} onPress={handleSendInvitation}>
+    <Text style={styles.buttonText}>Send Invitation</Text>
+  </TouchableOpacity>
+
+  <Text style={styles.sectionTitle}>Pending Invitations</Text>
+  {invitations.filter(inv => !inv.accepted_at).map(invitation => (
+    <View key={invitation.id} style={styles.invitationCard}>
+      <View>
+        <Text style={styles.userName}>{invitation.email}</Text>
+        <Text style={styles.userMeta}>
+          Role: {invitation.role} • Expires: {new Date(invitation.expires_at).toLocaleDateString()}
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={styles.cancelButton}
+        onPress={async () => {
+          const { cancelInvitation } = await import('../services/invitationService')
+          await cancelInvitation(invitation.id)
+          await loadAdminData()
+        }}
+      >
+        <Text style={styles.cancelButtonText}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  ))}
+</View>
+)}
      
 
  
@@ -517,5 +612,51 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 4,
   },
+  roleSelector: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  roleOption: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  roleOptionActive: {
+    borderColor: '#6366F1',
+    backgroundColor: '#e0e7ff',
+  },
+  roleOptionText: {
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  roleOptionTextActive: {
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+  invitationCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  cancelButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fee2e2',
+    borderRadius: 6,
+  },
+  cancelButtonText: {
+    fontSize: 12,
+    color: '#ef4444',
+    fontWeight: '500',
+  },  
 })
 
