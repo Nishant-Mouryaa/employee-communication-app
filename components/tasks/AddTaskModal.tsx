@@ -60,10 +60,11 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView 
-        style={styles.modalContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+     <KeyboardAvoidingView 
+  style={styles.modalContainer}
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} // Add this
+>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Add New Task</Text>
           <TouchableOpacity onPress={onClose}>
