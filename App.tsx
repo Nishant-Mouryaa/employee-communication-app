@@ -1,11 +1,13 @@
 // App.tsx
 import React, { useEffect, useState } from 'react'
 import { NavigationContainer } from '@react-navigation/native'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { View, ActivityIndicator, Platform, Text } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import * as Linking from 'expo-linking'
 import initI18n from './localization/i18n'
 import { HomeStackNavigator } from './navigators/HomeStackNavigator'
 
@@ -22,8 +24,32 @@ import AnnouncementsScreen from './screens/AnnouncementsScreen'
 import ProfileScreen from './screens/ProfileScreen'
 import AdminScreen from './screens/AdminScreen'
 import OrganizationSetupScreen from './screens/OrganizationSetupScreen'
+import AcceptInvitationScreen from './screens/AcceptInvitationScreen'
 
 const Tab = createBottomTabNavigator()
+const Stack = createNativeStackNavigator()
+
+// Deep linking configuration
+const prefix = Linking.createURL('/')
+const linking = {
+  prefixes: [prefix, 'supabaseauth://'],
+  config: {
+    screens: {
+      Auth: 'auth',
+      AcceptInvitation: 'invite',
+      OrganizationSetup: 'org-setup',
+      MainApp: {
+        screens: {
+          Home: 'home',
+          Chat: 'chat',
+          Tasks: 'tasks',
+          Announcements: 'announcements',
+          Admin: 'admin',
+        },
+      },
+    },
+  },
+}
 
 function TabNavigator() {
   const { user } = useAuth()
@@ -123,41 +149,123 @@ function TabNavigator() {
       <Tab.Screen 
         name="Home" 
         component={HomeStackNavigator}
-        options={{
-          tabBarLabel: 'Home',
-        }}
+        options={{ tabBarLabel: 'Home' }}
       />
       <Tab.Screen 
         name="Chat" 
         component={ChatScreen}
-        options={{
-          tabBarLabel: 'Chat',
-        }}
+        options={{ tabBarLabel: 'Chat' }}
       />
       <Tab.Screen 
         name="Tasks" 
         component={TasksScreen}
-        options={{
-          tabBarLabel: 'Tasks',
-        }}
+        options={{ tabBarLabel: 'Tasks' }}
       />
       <Tab.Screen 
         name="Announcements" 
         component={AnnouncementsScreen}
-        options={{
-          tabBarLabel: 'News',
-        }}
+        options={{ tabBarLabel: 'News' }}
       />
       {isUserAdmin && (
         <Tab.Screen 
           name="Admin" 
           component={AdminScreen}
-          options={{
-            tabBarLabel: 'Admin',
-          }}
+          options={{ tabBarLabel: 'Admin' }}
         />
       )}
     </Tab.Navigator>
+  )
+}
+
+
+function AppNavigator() {
+  const { user } = useAuth()
+  const { organizationId, isInvitedUser, loading: tenantLoading } = useTenant()
+
+  console.log('🔍 AppNavigator state:', { 
+    hasUser: !!user, 
+    hasOrg: !!organizationId,
+    isInvitedUser,
+    tenantLoading
+  })
+
+  // Show loading while tenant is loading
+  if (tenantLoading && user) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#6366f1" />
+        <Text style={{ marginTop: 16, color: '#64748b' }}>Loading organization...</Text>
+      </View>
+    )
+  }
+
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {!user ? (
+        // ==========================================
+        // NOT AUTHENTICATED
+        // ==========================================
+        <>
+          <Stack.Screen 
+            name="Auth" 
+            component={Auth}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen 
+            name="AcceptInvitation" 
+            component={AcceptInvitationScreen}
+            options={{
+              headerShown: true,
+              title: 'Accept Invitation',
+              presentation: 'modal',
+            }}
+          />
+        </>
+      ) : !organizationId ? (
+        // ==========================================
+        // AUTHENTICATED BUT NO ORGANIZATION
+        // Show OrganizationSetup for users without org
+        // (will become admins when they create an org)
+        // ==========================================
+        <>
+          <Stack.Screen 
+            name="OrganizationSetup" 
+            component={OrganizationSetupScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen 
+            name="AcceptInvitation" 
+            component={AcceptInvitationScreen}
+            options={{
+              headerShown: true,
+              title: 'Accept Invitation',
+              presentation: 'modal',
+            }}
+          />
+        </>
+      ) : (
+        // ==========================================
+        // AUTHENTICATED WITH ORGANIZATION
+        // Both invited users and admins come here
+        // ==========================================
+        <>
+          <Stack.Screen 
+            name="MainApp" 
+            component={TabNavigator}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen 
+            name="AcceptInvitation" 
+            component={AcceptInvitationScreen}
+            options={{
+              headerShown: true,
+              title: 'Accept Invitation',
+              presentation: 'modal',
+            }}
+          />
+        </>
+      )}
+    </Stack.Navigator>
   )
 }
 
@@ -172,7 +280,7 @@ function AppContent() {
     organizationId,
   })
 
-  // Show loading only while auth or tenant is loading
+  // Show loading while auth or tenant is loading
   if (authLoading || tenantLoading) {
     return (
       <View style={{ 
@@ -194,39 +302,11 @@ function AppContent() {
     )
   }
 
-  // Not logged in - show auth
-  if (!user) {
-    console.log('👤 No user - showing Auth')
-    return (
-      <>
-        <StatusBar style="auto" />
-        <NavigationContainer>
-          <Auth />
-        </NavigationContainer>
-      </>
-    )
-  }
-
-  // Logged in but no organization - show setup
-  if (!organizationId) {
-    console.log('🏢 No organization - showing OrganizationSetupScreen')
-    return (
-      <>
-        <StatusBar style="auto" />
-        <NavigationContainer>
-          <OrganizationSetupScreen />
-        </NavigationContainer>
-      </>
-    )
-  }
-
-  // Has everything - show main app
-  console.log('✅ Showing main app with organization:', organizationId)
   return (
     <>
       <StatusBar style="auto" />
-      <NavigationContainer>
-        <TabNavigator />
+      <NavigationContainer linking={linking}>
+        <AppNavigator />
       </NavigationContainer>
     </>
   )
