@@ -4,18 +4,18 @@ import {
   StyleSheet, 
   ScrollView, 
   RefreshControl,
-  Animated
+  Animated,
+  View
 } from 'react-native'
 import { useAuth } from '../hooks/useAuth'
 import { useNavigation } from '@react-navigation/native'
 import { useHomeData } from '../hooks/useHomeData'
 import { useRealtimeSubscriptions } from '../hooks/useRealtimeSubscriptions'
 import { HomeHeader } from '../components/home/HomeHeader'
-import { StatsSection } from '../components/home/StatsSection'
+import { TodaysOverview } from '../components/home/TodaysOverview'
 import { QuickActionsSection } from '../components/home/QuickActionsSection'
 import { QuickAction } from '../types/home'
 import { SafeAreaView } from 'react-native-safe-area-context'
-
 
 export default function HomeScreen() {
   const { user } = useAuth()
@@ -96,7 +96,7 @@ export default function HomeScreen() {
   }, [navigation])
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <HomeHeader 
         userEmail={user?.email} 
         onProfilePress={navigateToProfile}
@@ -115,7 +115,7 @@ export default function HomeScreen() {
         }
       >
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-          <StatsSection
+          <TodaysOverview
             unreadMessages={stats.unreadMessages}
             pendingTasks={stats.pendingTasks}
             onMessagesPress={navigateToChat}
@@ -130,24 +130,23 @@ export default function HomeScreen() {
           />
         </Animated.View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#f5f5f5',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 8,
+    paddingTop: 20,
     paddingBottom: 24,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 0,
   },
 })

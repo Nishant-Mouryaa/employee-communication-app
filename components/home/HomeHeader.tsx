@@ -2,7 +2,6 @@
 import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import { supabase } from '../../lib/supabase'
-import { IS_MOBILE } from '../../constants/home'
 import { Ionicons } from '@expo/vector-icons'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -30,20 +29,21 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
     )
   }
 
+  // Extract username from email
+  const username = userEmail ? userEmail.split('@')[0] : 'User'
+
   return (
-    <View style={styles.safeArea}>
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.headerContent}>
           <View style={styles.textContainer}>
             <Text style={styles.title}>Smart Workplace</Text>
-            <Text style={styles.subtitle}>
-              {userEmail ? `Welcome, ${userEmail.split('@')[0]}!` : 'Welcome!'}
-            </Text>
+            <Text style={styles.subtitle}>Hello, {username}</Text>
           </View>
           
           <View style={styles.buttonsContainer}>
             <TouchableOpacity
-              style={styles.profileButton}
+              style={styles.iconButton}
               onPress={onProfilePress}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
@@ -51,7 +51,7 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={styles.signOutButton}
+              style={styles.iconButton}
               onPress={handleSignOut}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
@@ -60,31 +60,23 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
           </View>
         </View>
       </View>
-    </View>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   safeArea: {
-   
-
+    backgroundColor: '#2c3e50',
   },
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-   
-    height: 50 + (IS_MOBILE ? 20 : 0),
-    
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    backgroundColor: '#2c3e50',
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    
+    alignItems: 'flex-start',
   },
   textContainer: {
     flex: 1,
@@ -94,36 +86,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  profileButton: {
-      backgroundColor: '#333',
+  iconButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     width: 40,
     height: 40,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  signOutButton: {
-    backgroundColor: '#333',
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   title: {
-    fontSize: IS_MOBILE ? 24: 24,
-    fontWeight: '800',
-    color: '#333',
-    marginBottom: 0,
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 4,
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: IS_MOBILE ? 15 : 15,
-    color: '#333',
-    fontWeight: '500',
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '400',
   },
 })
