@@ -24,14 +24,8 @@ export const isAdmin = async (userId: string): Promise<boolean> => {
   }
 }
 
-/**
- * Create a new channel (admin/manager only)
- */
 
 // services/adminService.ts
-
-// services/adminService.ts
-
 export const createChannel = async (
   name: string,
   description: string,
@@ -53,13 +47,14 @@ export const createChannel = async (
       organizationId,
     })
 
-    // Create channel
+    // Create channel with type field
     const { data: channel, error: channelError } = await supabase
       .from('channels')
       .insert([
         {
           name,
           description,
+          type: 'channel', // Add this required field
           created_by: createdBy,
           organization_id: organizationId,
           is_private: options.isPrivate || false,
@@ -76,28 +71,40 @@ export const createChannel = async (
 
     console.log('✅ [CREATE_CHANNEL] Channel created:', channel.id)
 
-    // Add creator as member
-    const { error: memberError } = await supabase
-      .from('channel_members')
-      .insert([
-        {
-          channel_id: channel.id,
-          user_id: createdBy,
-          role: 'admin',
-          organization_id: organizationId,
-        },
-      ])
+    // Get all users in the organization
+    const { data: orgMembers, error: membersError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('organization_id', organizationId)
 
-    if (memberError) {
-      console.error('❌ [CREATE_CHANNEL] Failed to add member, rolling back')
-      await supabase.from('channels').delete().eq('id', channel.id)
-      throw memberError
+    if (membersError) {
+      console.error('❌ [CREATE_CHANNEL] Error fetching org members:', membersError)
+      throw membersError
     }
 
-    console.log('✅ [CREATE_CHANNEL] Member added')
+    console.log(`📋 [CREATE_CHANNEL] Found ${orgMembers?.length || 0} organization members`)
 
-    // REMOVE the explicit audit log call since the trigger handles it
-    // The database trigger log_channel_creation() will automatically create the audit log
+    // Add ALL organization members to the channel
+    if (orgMembers && orgMembers.length > 0) {
+      const channelMemberships = orgMembers.map(member => ({
+        channel_id: channel.id,
+        user_id: member.id,
+        role: member.id === createdBy ? 'admin' : 'member',
+        organization_id: organizationId,
+      }))
+
+      const { error: membershipError } = await supabase
+        .from('channel_members')
+        .insert(channelMemberships)
+
+      if (membershipError) {
+        console.error('❌ [CREATE_CHANNEL] Failed to add members:', membershipError)
+        // Don't rollback - channel is created, memberships can be synced later
+        console.warn('⚠️ Channel created but some members may not have been added')
+      } else {
+        console.log(`✅ [CREATE_CHANNEL] Added ${channelMemberships.length} members to channel`)
+      }
+    }
 
     return channel
   } catch (error) {
