@@ -862,14 +862,13 @@ const styles = StyleSheet.create({
   },
   conversationHeader: {
     backgroundColor: '#ffffff',
-    borderBottomEndRadius: 16,
-    borderBottomStartRadius: 16,
+ 
   
   },
   sidebarHeader: {
-    backgroundColor: '#6366F1',
-    borderBottomEndRadius: 16,
-    borderBottomStartRadius: 16,
+    
+ 
+   
     paddingBottom: 12,
   },
   headerContent: {
@@ -878,9 +877,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: '#1E293B',
   },
   textContainer: {
     flex: 1,
+    backgroundColor: '#1E293B',
   },
   title: {
     fontSize: 28,
