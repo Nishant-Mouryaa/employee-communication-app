@@ -2,6 +2,7 @@
 import React from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
 import { TaskFilter } from '../../types/tasks'
+import { Platform } from 'react-native'
 
 interface TaskFiltersProps {
   activeFilter: TaskFilter
@@ -33,59 +34,76 @@ export const TaskFilters: React.FC<TaskFiltersProps> = ({
   }
 
   return (
-    <ScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={false}
-      style={styles.filterContainer}
-      contentContainerStyle={styles.filterContent}
-    >
-      {FILTERS.map(filter => (
-        <TouchableOpacity
-          key={filter.value}
-          style={[
-            styles.filterButton,
-            activeFilter === filter.value && styles.filterButtonActive
-          ]}
-          onPress={() => onFilterChange(filter.value)}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            activeFilter === filter.value && styles.filterButtonTextActive
-          ]}>
-            {filter.label}{getCount(filter.value)}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+    <View style={styles.filterWrapper}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterContainer}
+        contentContainerStyle={styles.filterContent}
+      >
+        {FILTERS.map(filter => (
+          <TouchableOpacity
+            key={filter.value}
+            style={[
+              styles.filterButton,
+              activeFilter === filter.value && styles.filterButtonActive
+            ]}
+            onPress={() => onFilterChange(filter.value)}
+          >
+            <Text style={[
+              styles.filterButtonText,
+              activeFilter === filter.value && styles.filterButtonTextActive
+            ]}>
+              {filter.label}{getCount(filter.value)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  filterWrapper: {
+    minHeight: 56, // Fixed minimum height for the filter container
+  },
   filterContainer: {
-    flexGrow: 0,
-    
+    flexGrow: 0, // Prevent container from expanding
+    flexShrink: 1,
+       backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E1E6EC',
   },
   filterContent: {
-    gap: 8,
-    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
+    height: 56, // Fixed height for content container
   },
   filterButton: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 24,
-    backgroundColor: 'white',
-    borderWidth: 0,
+    borderRadius: 20,
+    backgroundColor: '#F7F8FA',
+    marginRight: 8,
+    height: 40, // Fixed height for buttons
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 100, // Minimum width for better touch targets
   },
   filterButtonActive: {
-    backgroundColor: '#3B4B6B',
+    backgroundColor: '#1C2A4A',
   },
   filterButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#6A727C',
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Text' : 'Inter',
+    textAlign: 'center',
+    includeFontPadding: false, // Remove extra font padding
+    lineHeight: 16, // Explicit line height for consistent text rendering
   },
   filterButtonTextActive: {
-    color: 'white',
+    color: '#FFFFFF',
   },
 })
