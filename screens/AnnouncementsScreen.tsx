@@ -252,7 +252,6 @@ export default function AnnouncementsScreen() {
 
   return (
     <View style={styles.container}>
-      <OrganizationSwitcher />
 <AnnouncementHeader 
   onAddAnnouncementPress={() => setModalVisible(true)}
   onFiltersChange={(newFilters) => {

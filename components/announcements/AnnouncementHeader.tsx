@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
   },
   headerBackground: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#ffffff'
+    backgroundColor: '#1E293B'
   },
   headerContent: {
     paddingTop: 20,
@@ -77,12 +77,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#ffffff',
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: '#fff',
   },
   actions: {
     flexDirection: 'row',
