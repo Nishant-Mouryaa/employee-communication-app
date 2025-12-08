@@ -8,7 +8,9 @@ import {
   FlatList, 
   RefreshControl, 
   Image,
-  TextInput
+  TextInput,
+  Modal,
+  Keyboard
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Channel } from '../../types/chat'
@@ -184,8 +186,8 @@ export const ChannelList: React.FC<{
   onChannelSelect: (channel: Channel) => void
   refreshing?: boolean
   onRefresh?: () => void
-  onNewChat?: () => void // New prop for new chat button
-  currentUserEmail?: string // For header subtitle
+  onNewChat?: () => void
+  currentUserEmail?: string
 }> = ({ 
   channels, 
   selectedChannelId, 
@@ -197,6 +199,7 @@ export const ChannelList: React.FC<{
 }) => {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [showSearchModal, setShowSearchModal] = useState(false)
 
   // Remove duplicates based on channel ID
   const uniqueChannels = React.useMemo(() => {
@@ -268,6 +271,19 @@ export const ChannelList: React.FC<{
     return email.split('@')[0]
   }
 
+  // Handle search modal close
+  const handleSearchModalClose = () => {
+    setShowSearchModal(false)
+    Keyboard.dismiss()
+  }
+
+  // Clear search and close modal
+  const handleClearSearch = () => {
+    setSearchQuery('')
+    setShowSearchModal(false)
+    Keyboard.dismiss()
+  }
+
   return (
     <View style={styles.container}>
       {/* Navy Header */}
@@ -280,28 +296,27 @@ export const ChannelList: React.FC<{
             </Text>
           </View>
           
-          {onNewChat && (
+          <View style={styles.headerButtons}>
+            {/* Search Button */}
             <TouchableOpacity
-              style={styles.newChatButton}
-              onPress={onNewChat}
+              style={styles.iconButton}
+              onPress={() => setShowSearchModal(true)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="add-outline" size={24} color="#ffffff" />
+              <Ionicons name="search-outline" size={24} color="#ffffff" />
             </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Integrated Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#6A727C" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search chats..."
-            placeholderTextColor="#6A727C"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            clearButtonMode="while-editing"
-          />
+            
+            {/* New Chat Button */}
+            {onNewChat && (
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={onNewChat}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="add-outline" size={24} color="#ffffff" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
@@ -377,6 +392,72 @@ export const ChannelList: React.FC<{
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       )}
+
+      {/* Search Modal */}
+      <Modal
+        visible={showSearchModal}
+        animationType="slide"
+        transparent={true}
+        statusBarTranslucent={true}
+      >
+        <View style={styles.searchModalContainer}>
+          <View style={styles.searchModalHeader}>
+            <View style={styles.searchModalInputContainer}>
+              <Ionicons name="search" size={20} color="#6A727C" style={styles.searchModalIcon} />
+              <TextInput
+                style={styles.searchModalInput}
+                placeholder="Search chats..."
+                placeholderTextColor="#6A727C"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus={true}
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={20} color="#6A727C" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity onPress={handleSearchModalClose} style={styles.searchModalCancelButton}>
+              <Text style={styles.searchModalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Search Results */}
+          <FlatList
+            data={sortedChannels}
+            renderItem={({ item }) => (
+              <ChannelItem
+                channel={item}
+                isSelected={item.id === selectedChannelId}
+                onSelect={() => {
+                  onChannelSelect(item)
+                  handleSearchModalClose()
+                }}
+              />
+            )}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.searchResultsContent}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ListEmptyComponent={
+              <View style={styles.searchEmptyState}>
+                <Ionicons name="search-outline" size={48} color="#E1E6EC" />
+                <Text style={styles.searchEmptyStateTitle}>
+                  No results found
+                </Text>
+                <Text style={styles.searchEmptyStateSubtitle}>
+                  {searchQuery 
+                    ? `No chats matching "${searchQuery}"`
+                    : 'Try searching for a chat name or message content'
+                  }
+                </Text>
+              </View>
+            }
+          />
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -387,10 +468,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F8FA',
   },
   header: {
-    backgroundColor: '#1C2A4A',
+    backgroundColor: '#1E293B',
     paddingBottom: 16,
-    borderBottomEndRadius: 16,
-    borderBottomStartRadius: 16,
   },
   headerContent: {
     flexDirection: 'row',
@@ -401,6 +480,21 @@ const styles = StyleSheet.create({
   },
   textContainer: {
     flex: 1,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   title: {
     fontSize: 28,
@@ -415,36 +509,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: Platform.OS === 'ios' ? 'SF Pro Text' : 'Inter',
     marginTop: 2,
-  },
-  newChatButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    marginHorizontal: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 8,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Text' : 'Inter',
-    fontWeight: '400',
   },
   filterContainer: {
     flexDirection: 'row',
@@ -614,6 +678,77 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   emptyStateSubtitle: {
+    fontSize: 14,
+    color: '#6A727C',
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Text' : 'Inter',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  // Search Modal Styles
+  searchModalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    marginTop: Platform.OS === 'ios' ? 44 : 0, // Account for status bar
+  },
+  searchModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F7F8FA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E1E6EC',
+  },
+  searchModalInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E1E6EC',
+  },
+  searchModalIcon: {
+    marginRight: 8,
+  },
+  searchModalInput: {
+    flex: 1,
+    color: '#1E2A32',
+    fontSize: 16,
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Text' : 'Inter',
+    fontWeight: '400',
+  },
+  searchModalCancelButton: {
+    paddingVertical: 8,
+  },
+  searchModalCancelText: {
+    fontSize: 16,
+    color: '#27A4BA',
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Text' : 'Inter',
+  },
+  searchResultsContent: {
+    paddingTop: 8,
+  },
+  searchEmptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    marginTop: 100,
+  },
+  searchEmptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1E2A32',
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Inter',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  searchEmptyStateSubtitle: {
     fontSize: 14,
     color: '#6A727C',
     fontFamily: Platform.OS === 'ios' ? 'SF Pro Text' : 'Inter',

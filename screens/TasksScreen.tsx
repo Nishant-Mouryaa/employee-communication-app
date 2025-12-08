@@ -337,7 +337,8 @@ import { OrganizationSwitcher } from '../components/common/OrganizationSwitcher'
         onFilterChange={setFilter}
       />
 
-        {/* <TaskFilters activeFilter={filter} onFilterChange={setFilter} /> */}
+        <TaskFilters activeFilter={filter} onFilterChange={setFilter} />
+
 
     
     <TaskList

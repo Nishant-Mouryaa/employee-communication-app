@@ -63,10 +63,12 @@ export const TaskFilters: React.FC<TaskFiltersProps> = ({
 const styles = StyleSheet.create({
   filterContainer: {
     flexGrow: 0,
+    
   },
   filterContent: {
     gap: 8,
     paddingVertical: 4,
+    paddingHorizontal: 16,
   },
   filterButton: {
     paddingHorizontal: 20,

@@ -66,12 +66,12 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: '#2c3e50',
+    backgroundColor: '#1E293B',
   },
   container: {
     paddingHorizontal: 20,
     paddingVertical: 20,
-    backgroundColor: '#2c3e50',
+    backgroundColor: '#1E293B',
   },
   headerContent: {
     flexDirection: 'row',
