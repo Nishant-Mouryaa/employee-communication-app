@@ -10,6 +10,7 @@ import { useDocumentPicker } from '../hooks/useDocumentPicker'
   import { getNextStatus } from '../utils/taskHelpers'
   import { downloadAttachment } from '../services/taskAttachmentService'
   import { MAX_FILE_SIZE } from '../constants/tasks'
+  import { Ionicons } from '@expo/vector-icons'
 import {
     TaskHeader,
     TaskFilters,
@@ -329,22 +330,32 @@ import { OrganizationSwitcher } from '../components/common/OrganizationSwitcher'
 
     return (
       <View style={styles.container}>
-        <OrganizationSwitcher />
-        <TaskHeader onAddTaskPress={() => setShowAddModal(true)} />
+       
+          <TaskHeader 
+        onAddTaskPress={() => setShowAddModal(true)}
+        activeFilter={filter}
+        onFilterChange={setFilter}
+      />
 
-        <TaskFilters activeFilter={filter} onFilterChange={setFilter} />
+        {/* <TaskFilters activeFilter={filter} onFilterChange={setFilter} /> */}
 
     
-        <TaskList
-          tasks={tasks}
-          attachments={attachments}
-          comments={comments}
-          loading={loading}
-          filterType={filter}
-          onTaskPress={handleTaskPress}
-          onStatusPress={handleStatusPress}
-          onRefresh={loadTasks}
-        />
+    <TaskList
+        tasks={tasks}
+        attachments={attachments}
+        comments={comments}
+        loading={loading}
+        filterType={filter}
+        onTaskPress={handleTaskPress}
+        onStatusPress={handleStatusPress}
+        onRefresh={loadTasks}
+      />
+       <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setShowAddModal(true)}
+      >
+        <Ionicons name="add" size={28} color="white" />
+      </TouchableOpacity>
 
         <AddTaskModal
           visible={showAddModal}
@@ -404,7 +415,22 @@ import { OrganizationSwitcher } from '../components/common/OrganizationSwitcher'
       flex: 1,
       backgroundColor: '#f8f9fa',
     },
-
+fab: {
+    position: 'absolute',
+    right: 24,
+    bottom: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
 
     loadingContainer: {
       flex: 1,

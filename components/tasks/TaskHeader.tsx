@@ -1,62 +1,90 @@
 // components/tasks/TaskHeader.tsx
-import React from 'react'
-import { View, Text, StyleSheet } from 'react-native'
-import { IS_MOBILE } from '../../constants/home'
+import React, { useState } from 'react'
+import { View, Text, StyleSheet, TextInput } from 'react-native'
 import { TouchableOpacity } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { TaskFilters } from './TaskFilters'
+import { TaskFilter } from '../../types/tasks'
 
 interface TaskHeaderProps {
   onAddTaskPress: () => void;
+  activeFilter: TaskFilter;
+  onFilterChange: (filter: TaskFilter) => void;
+  onSearchChange?: (text: string) => void;
 }
 
-export const TaskHeader: React.FC<TaskHeaderProps> = ({ onAddTaskPress }) => {
+export const TaskHeader: React.FC<TaskHeaderProps> = ({ 
+  onAddTaskPress, 
+  activeFilter, 
+  onFilterChange,
+  onSearchChange 
+}) => {
+  const [searchText, setSearchText] = useState('')
+
+  const handleSearchChange = (text: string) => {
+    setSearchText(text)
+    onSearchChange?.(text)
+  }
+
   return (
     <View style={styles.header}>
-      <Text style={styles.title}>Tasks</Text>
-      <Text style={styles.subtitle}>Manage your team's tasks</Text>
-       <View style={{ position: 'absolute', right: 24, top: 60 }}>
-     <TouchableOpacity 
-        style={styles.addTaskButton}
-        onPress={onAddTaskPress}
-      >
-         <Ionicons name="add-outline" size={24} color="#ffffff" />
-      </TouchableOpacity>
-  </View>
-    </View>
+      <View style={styles.titleContainer}>
+        <Text style={styles.title}>Tasks</Text>
+        <Text style={styles.subtitle}>Manage your team's work efficiently</Text>
+      </View>
 
+      <View style={styles.searchContainer}>
+        <Ionicons name="search-outline" size={20} color="#9CA3AF" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search tasks..."
+          placeholderTextColor="#9CA3AF"
+          value={searchText}
+          onChangeText={handleSearchChange}
+        />
+      </View>
+
+      <TaskFilters activeFilter={activeFilter} onFilterChange={onFilterChange} />
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   header: {
     paddingTop: 20,
-    paddingBottom: 20,
+    paddingBottom: 16,
     paddingHorizontal: 24,
+    backgroundColor: '#1E293B', // Dark blue/navy color
+  },
+  titleContainer: {
+    marginBottom: 20,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
+    color: '#ffffff',
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+    color: '#CBD5E1',
+    fontWeight: '400',
   },
-  addTaskButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  addTaskButton: {
-backgroundColor: '#333',
-      width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+  searchContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: '#334155',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#ffffff',
   },
 })

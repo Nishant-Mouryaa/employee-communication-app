@@ -20,6 +20,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onPress,
   onStatusPress
 }) => {
+  const priorityEmoji = {
+    high: '🔴',
+    medium: '🟡',
+    low: '🟢'
+  }
+
   return (
     <TouchableOpacity 
       style={styles.taskCard}
@@ -27,69 +33,47 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       activeOpacity={0.7}
     >
       <View style={styles.taskHeader}>
-        <View style={styles.taskTitleContainer}>
-          <Text style={styles.taskTitle}>{task.title}</Text>
-          <View style={styles.badgesRow}>
-            <View style={[
-              styles.priorityBadge,
-              { backgroundColor: PRIORITY_COLORS[task.priority] }
-            ]}>
-              <Text style={styles.priorityText}>
-                {task.priority.toUpperCase()}
-              </Text>
-            </View>
-            {task.labels && task.labels.length > 0 && (
-              <View style={styles.labelsPreview}>
-                {task.labels.slice(0, 2).map((label) => (
-                  <View
-                    key={label.id}
-                    style={[styles.labelChip, { backgroundColor: label.color + '20', borderColor: label.color }]}
-                  >
-                    <Text style={[styles.labelChipText, { color: label.color }]}>
-                      {label.name}
-                    </Text>
-                  </View>
-                ))}
-                {task.labels.length > 2 && (
-                  <Text style={styles.moreLabelIndicator}>
-                    +{task.labels.length - 2}
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
-        </View>
+        <Text style={styles.taskTitle}>{task.title}</Text>
         <TouchableOpacity
           style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[task.status] }]}
           onPress={onStatusPress}
         >
           <Text style={styles.statusText}>
-            {task.status.replace('-', ' ').toUpperCase()}
+            {task.status === 'todo' ? 'TODO' : 
+             task.status === 'in-progress' ? 'IN PROGRESS' : 'DONE'}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {task.description ? (
-        <Text style={styles.taskDescription} numberOfLines={2}>
-          {task.description}
+      <View style={styles.infoRow}>
+        <Text style={styles.infoLabel}>Priority:</Text>
+        <Text style={styles.infoValue}>
+          {priorityEmoji[task.priority]} {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
         </Text>
-      ) : null}
+      </View>
 
-      <View style={styles.taskFooter}>
-        <View style={styles.taskMeta}>
-          <Text style={styles.assignedTo}>
-            👤 {task.assigned_to_profile?.full_name || task.assigned_to_profile?.username || 'Unassigned'}
-          </Text>
-          <Text style={[
-            styles.dueDate,
-            isOverdue(task.due_date) && styles.overdueDate
-          ]}>
-            📅 {formatDate(task.due_date)}
-            {isOverdue(task.due_date) && ' ⚠️'}
-          </Text>
-        </View>
-        
-        <View style={styles.taskIcons}>
+      <View style={styles.infoRow}>
+        <Text style={styles.infoLabel}>Assigned:</Text>
+        <Text style={styles.infoValue}>
+          {task.assigned_to_profile?.full_name || task.assigned_to_profile?.username || 'Unassigned'}
+        </Text>
+      </View>
+
+      <View style={styles.infoRow}>
+        <Text style={styles.calendarIcon}>📅</Text>
+        <Text style={[
+          styles.dueDate,
+          isOverdue(task.due_date) && styles.overdueDate
+        ]}>
+          {formatDate(task.due_date)}
+        </Text>
+        {isOverdue(task.due_date) && (
+          <Text style={styles.warningIcon}>⚠️</Text>
+        )}
+      </View>
+
+      {(attachmentCount > 0 || commentCount > 0) && (
+        <View style={styles.taskFooter}>
           {attachmentCount > 0 && (
             <View style={styles.iconBadge}>
               <Text style={styles.iconBadgeText}>
@@ -105,7 +89,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             </View>
           )}
         </View>
-      </View>
+      )}
     </TouchableOpacity>
   )
 }
@@ -113,116 +97,86 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 const styles = StyleSheet.create({
   taskCard: {
     backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   taskHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  taskTitleContainer: {
+  taskTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
     flex: 1,
     marginRight: 12,
   },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 6,
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  priorityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  priorityText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  labelsPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  labelChip: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  labelChipText: {
-    fontSize: 9,
-    fontWeight: '600',
-  },
-  moreLabelIndicator: {
-    fontSize: 10,
-    color: '#6B7280',
-    fontWeight: '600',
-  },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   statusText: {
     color: 'white',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
-  taskDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
-    marginBottom: 12,
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  infoLabel: {
+    fontSize: 15,
+    color: '#1F2937',
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  infoValue: {
+    fontSize: 15,
+    color: '#4B5563',
+  },
+  calendarIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  dueDate: {
+    fontSize: 15,
+    color: '#4B5563',
+    marginRight: 8,
+  },
+  overdueDate: {
+    color: '#DC2626',
+    fontWeight: '600',
+  },
+  warningIcon: {
+    fontSize: 16,
   },
   taskFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  taskMeta: {
-    flex: 1,
-  },
-  assignedTo: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 2,
-  },
-  dueDate: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  overdueDate: {
-    color: '#EF4444',
-    fontWeight: '600',
-  },
-  taskIcons: {
-    flexDirection: 'row',
     gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
   iconBadge: {
     backgroundColor: '#F3F4F6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
   },
   iconBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#6B7280',
     fontWeight: '600',
   },

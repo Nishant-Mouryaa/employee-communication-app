@@ -1,11 +1,17 @@
 // components/tasks/TaskFilters.tsx
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
 import { TaskFilter } from '../../types/tasks'
 
 interface TaskFiltersProps {
   activeFilter: TaskFilter
   onFilterChange: (filter: TaskFilter) => void
+  taskCounts?: {
+    all: number
+    todo: number
+    'in-progress': number
+    done: number
+  }
 }
 
 const FILTERS: { value: TaskFilter; label: string }[] = [
@@ -15,9 +21,24 @@ const FILTERS: { value: TaskFilter; label: string }[] = [
   { value: 'done', label: 'Done' },
 ]
 
-export const TaskFilters: React.FC<TaskFiltersProps> = ({ activeFilter, onFilterChange }) => {
+export const TaskFilters: React.FC<TaskFiltersProps> = ({ 
+  activeFilter, 
+  onFilterChange,
+  taskCounts 
+}) => {
+  const getCount = (filter: TaskFilter) => {
+    if (!taskCounts) return ''
+    const count = taskCounts[filter]
+    return count ? ` (${count})` : ' (0)'
+  }
+
   return (
-    <View style={styles.filterContainer}>
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false}
+      style={styles.filterContainer}
+      contentContainerStyle={styles.filterContent}
+    >
       {FILTERS.map(filter => (
         <TouchableOpacity
           key={filter.value}
@@ -31,37 +52,36 @@ export const TaskFilters: React.FC<TaskFiltersProps> = ({ activeFilter, onFilter
             styles.filterButtonText,
             activeFilter === filter.value && styles.filterButtonTextActive
           ]}>
-            {filter.label}
+            {filter.label}{getCount(filter.value)}
           </Text>
         </TouchableOpacity>
       ))}
-    </View>
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
   filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    flexGrow: 0,
+  },
+  filterContent: {
     gap: 8,
+    paddingVertical: 4,
   },
   filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
     backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderWidth: 0,
   },
   filterButtonActive: {
-    backgroundColor: '#6366F1',
-    borderColor: '#6366F1',
+    backgroundColor: '#3B4B6B',
   },
   filterButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#1F2937',
   },
   filterButtonTextActive: {
     color: 'white',

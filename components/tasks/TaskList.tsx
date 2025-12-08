@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
   taskList: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 10,
   },
   emptyContainer: {
     padding: 40,
