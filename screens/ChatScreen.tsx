@@ -523,22 +523,7 @@ const handleReply = useCallback((message: Message) => {
             // Conversation List View (WhatsApp home screen)
             <View style={styles.conversationListContainer}>
               {/* Updated Header to match HomeScreen */}
-              <View style={styles.conversationHeader}>
-                <View style={styles.headerContent}>
-                  <View style={styles.textContainer}>
-                    <Text style={styles.title}>Chats</Text>
-                    
-                  </View>
-                  
-                  <TouchableOpacity
-                    style={styles.newChatButton}
-                    onPress={() => setShowChannelModal(true)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="add-outline" size={24} color="#ffffff" />
-                  </TouchableOpacity>
-                </View>
-              </View>
+             
               
               <ChannelList
                 channels={channels}

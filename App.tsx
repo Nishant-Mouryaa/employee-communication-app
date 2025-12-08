@@ -107,7 +107,7 @@ function TabNavigator() {
           paddingTop: 8,
           paddingBottom: Platform.OS === 'ios' ? 28 : 8 + insets.bottom,
         },
-        tabBarActiveTintColor: '#6366f1',
+        tabBarActiveTintColor: '#2c3e50',
         tabBarInactiveTintColor: '#9ca3af',
         tabBarLabelStyle: {
           fontSize: 12,
