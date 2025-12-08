@@ -394,6 +394,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   messageBubble: {
+   
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
@@ -418,7 +419,7 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   ownMessageBubble: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#2c3e50',
     borderBottomRightRadius: 6,
   },
   otherMessageBubble: {
@@ -435,6 +436,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   messageText: {
+    color: '#ffffff',
     fontSize: 15,
     lineHeight: 22,
     letterSpacing: 0.2,

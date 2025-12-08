@@ -62,7 +62,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             onPress={onBackPress}
             activeOpacity={0.7}
           >
-            <Ionicons name="chevron-back" size={24} color="#6366F1" />
+            <Ionicons name="chevron-back" size={24} color="#2c3e50" />
           </TouchableOpacity>
         )}
         
