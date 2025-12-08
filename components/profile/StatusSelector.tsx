@@ -70,8 +70,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   statusChipSelected: {
-    backgroundColor: '#6366F1',
-    borderColor: '#6366F1',
+    backgroundColor: '#1E293B',
+    borderColor: '#1E293B',
   },
   statusChipDisabled: {
     opacity: 0.6,
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   },
   clearStatusText: {
     fontSize: 12,
-    color: '#6366F1',
+    color: '#1E293B',
     fontWeight: '600',
   },
   label: {

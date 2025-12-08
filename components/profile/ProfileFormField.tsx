@@ -48,7 +48,7 @@ export function ProfileFormField({
         ]}
         inputStyle={multiline ? styles.textArea : styles.input}
         placeholderTextColor="#9ca3af"
-        leftIcon={{ type: iconType, name: icon, color: '#6366F1', size: 18 }}
+        leftIcon={{ type: iconType, name: icon, color: '#1E293B', size: 18 }}
       />
     </View>
   )

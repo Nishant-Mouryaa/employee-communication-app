@@ -87,12 +87,12 @@ export function ProfileHeader({
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#1E293B',
     minHeight: 200,
   },
   headerBackground: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#1E293B',
   },
   headerContent: {
     paddingTop: 60,
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 4,
     right: 4,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#1E293B',
     width: 28,
     height: 28,
     borderRadius: 14,

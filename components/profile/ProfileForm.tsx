@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   editButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#1E293B',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#f3f4f6',
   },
   saveButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#1E293B',
     paddingVertical: 12,
     borderRadius: 10,
   },
