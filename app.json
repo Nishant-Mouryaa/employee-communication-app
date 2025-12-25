@@ -10,7 +10,7 @@
           "icon": "./assets/notification-icon.png",
           "color": "#007AFF",
           "sounds": [
-            "./assets/notification-sound.wav"
+            "./assets/notification_sound.wav"
           ]
         }
       ],
