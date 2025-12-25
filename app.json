@@ -34,7 +34,7 @@
     "android": {
       "package": "com.myname.supabaseauth",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/WorkConnectIcon2.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
