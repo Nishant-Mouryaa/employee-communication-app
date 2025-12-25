@@ -51,18 +51,6 @@
             "BROWSABLE",
             "DEFAULT"
           ]
-        },
-        {
-          "action": "VIEW",
-          "data": [
-            {
-              "scheme": "supabaseauth"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
         }
       ]
     },
@@ -79,6 +67,7 @@
     },
     "updates": {
       "url": "https://u.expo.dev/90acd6af-5ede-4b1f-b62f-c15a12091410"
-    }
+    },
+    "owner": "nishant2004"
   }
 }
