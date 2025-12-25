@@ -14,7 +14,8 @@
           ]
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "expo-font"
     ],
     "version": "1.0.0",
     "orientation": "portrait",
