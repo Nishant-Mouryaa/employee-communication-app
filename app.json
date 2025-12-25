@@ -1,15 +1,17 @@
 {
   "expo": {
-    "name": "supa-base-auth",
-    "slug": "supa-base-auth",
-    "scheme": "supabaseauth",
+    "name": "WorkConnect",
+    "slug": "workconnect",
+    "scheme": "workconnect",
     "plugins": [
       [
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
           "color": "#007AFF",
-          "sounds": ["./assets/notification-sound.wav"]
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ]
         }
       ],
       "expo-localization"
@@ -44,12 +46,38 @@
               "scheme": "supabaseauth"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "supabaseauth"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "90acd6af-5ede-4b1f-b62f-c15a12091410"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/90acd6af-5ede-4b1f-b62f-c15a12091410"
     }
   }
 }

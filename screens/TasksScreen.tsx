@@ -351,12 +351,12 @@ import { OrganizationSwitcher } from '../components/common/OrganizationSwitcher'
         onStatusPress={handleStatusPress}
         onRefresh={loadTasks}
       />
-       <TouchableOpacity
+       {/* <TouchableOpacity
         style={styles.fab}
         onPress={() => setShowAddModal(true)}
       >
         <Ionicons name="add" size={28} color="white" />
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
         <AddTaskModal
           visible={showAddModal}
