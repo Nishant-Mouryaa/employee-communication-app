@@ -90,6 +90,11 @@ import { OrganizationSwitcher } from '../components/common/OrganizationSwitcher'
       }
     }, [user, organizationId, loadTasks, loadUsers, loadLabels])
 
+    useEffect(() => {
+  console.log('Labels loaded:', allLabels.length, allLabels)
+}, [allLabels])
+
+
     // Load attachments and comments when tasks change
     useEffect(() => {
       if (!organizationId) return
@@ -400,13 +405,14 @@ import { OrganizationSwitcher } from '../components/common/OrganizationSwitcher'
           onTaskDelete={handleDeleteTask}
         />
 
-        <LabelSelector
-          visible={showLabelSelector}
-          labels={allLabels}
-          selectedLabelIds={selectedTask?.labels?.map(l => l.id) || []}
-          onClose={() => setShowLabelSelector(false)}
-          onToggle={handleToggleTaskLabel}
-        />
+<LabelSelector
+  visible={showLabelSelector}
+  labels={allLabels}
+  selectedLabelIds={selectedTask?.labels?.map(l => l.id) || []}
+  onClose={() => setShowLabelSelector(false)}
+  onToggle={handleToggleTaskLabel}
+  loading={loading} 
+/>
       </View>
     )
   }

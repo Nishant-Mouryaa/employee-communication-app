@@ -405,10 +405,12 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     backgroundColor: '#F9FAFB',
   },
-  labelSelectChipText: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
+// Update the labelSelectChipText style:
+labelSelectChipText: {
+  fontSize: 13,
+  color: '#374151', // Changed from #6B7280 (light gray) to #374151 (dark gray)
+  fontWeight: '500', // Add medium weight for better readability
+},
   attachFileButton: {
     borderWidth: 2,
     borderColor: '#6366F1',

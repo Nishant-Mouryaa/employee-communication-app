@@ -254,6 +254,7 @@ export default function AnnouncementsScreen() {
     <View style={styles.container}>
 <AnnouncementHeader 
   onAddAnnouncementPress={() => setModalVisible(true)}
+
   onFiltersChange={(newFilters) => {
     Object.entries(newFilters).forEach(([key, value]) => {
       updateFilter(key as any, value)

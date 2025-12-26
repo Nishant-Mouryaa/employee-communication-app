@@ -258,12 +258,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                   </View>
                 )}
 
-                {message.content ? (
-                  <>
-                    <MessageText content={message.content} style={styles.messageText} />
-                    <MessageLinkPreviews content={message.content} />
-                  </>
-                ) : null}
+               {message.content ? (
+  <>
+    <MessageText 
+      content={message.content} 
+      style={[
+        styles.messageText, 
+        isOwn ? styles.ownMessageText : styles.otherMessageText
+      ]} 
+    />
+    <MessageLinkPreviews content={message.content} />
+  </>
+) : null}
                 
                 <View style={styles.messageFooter}>
   <Text style={[styles.messageTime, isOwn && styles.ownMessageTime]}>
@@ -331,9 +337,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   )
 }
 
-// ... keep all the existing styles and add these new ones:
 const styles = StyleSheet.create({
-  // ... all existing styles ...
   messageContainer: {
     marginBottom: 12,
     paddingHorizontal: 4,
@@ -427,6 +431,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 6,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    color: '#333',
   },
   userName: {
     fontSize: 13,
@@ -445,7 +450,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   otherMessageText: {
-    color: '#1e293b',
+    color: '#333',
   },
   messageFooter: {
     flexDirection: 'row',

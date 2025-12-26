@@ -1,7 +1,8 @@
 // components/tasks/LabelSelector.tsx
 import React from 'react'
-import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
+import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native'
 import { TaskLabel } from '../../types/tasks'
+import { Platform } from 'react-native'
 
 interface LabelSelectorProps {
   visible: boolean
@@ -9,6 +10,7 @@ interface LabelSelectorProps {
   selectedLabelIds: string[]
   onClose: () => void
   onToggle: (labelId: string) => void
+  loading?: boolean // Add loading prop
 }
 
 export const LabelSelector: React.FC<LabelSelectorProps> = ({
@@ -16,8 +18,31 @@ export const LabelSelector: React.FC<LabelSelectorProps> = ({
   labels,
   selectedLabelIds,
   onClose,
-  onToggle
+  onToggle,
+  loading = false
 }) => {
+  // Generate fallback color if color is invalid
+  const getLabelColor = (color: string) => {
+    // Check if color is a valid hex color
+    const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/
+    if (hexColorRegex.test(color)) {
+      return color
+    }
+    // Return a default color if invalid
+    return '#6366F1'
+  }
+
+  if (loading) {
+    return (
+      <Modal visible={visible} transparent animationType="fade">
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6366F1" />
+          <Text style={styles.loadingText}>Loading labels...</Text>
+        </View>
+      </Modal>
+    )
+  }
+
   return (
     <Modal
       visible={visible}
@@ -28,34 +53,55 @@ export const LabelSelector: React.FC<LabelSelectorProps> = ({
       <View style={styles.modalContainer}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Manage Labels</Text>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButtonContainer}>
             <Text style={styles.closeButton}>Done</Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.labelSelectorContent}>
-          {labels.map((label) => {
-            const isSelected = selectedLabelIds.includes(label.id)
-            return (
-              <TouchableOpacity
-                key={label.id}
-                style={[
-                  styles.labelSelectorItem,
-                  isSelected && styles.labelSelectorItemSelected
-                ]}
-                onPress={() => onToggle(label.id)}
-              >
-                <View
-                  style={[styles.labelSelectorColor, { backgroundColor: label.color }]}
-                />
-                <Text style={styles.labelSelectorName}>{label.name}</Text>
-                {isSelected && (
-                  <Text style={styles.labelSelectorCheck}>✓</Text>
-                )}
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
+        {labels.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>🏷️</Text>
+            <Text style={styles.emptyTitle}>No Labels</Text>
+            <Text style={styles.emptyText}>
+              Create labels first to assign them to tasks
+            </Text>
+          </View>
+        ) : (
+          <ScrollView style={styles.labelSelectorContent} showsVerticalScrollIndicator={false}>
+            {labels.map((label) => {
+              const isSelected = selectedLabelIds.includes(label.id)
+              const labelColor = getLabelColor(label.color || '#6366F1')
+              
+              return (
+                <TouchableOpacity
+                  key={label.id}
+                  style={[
+                    styles.labelSelectorItem,
+                    isSelected && styles.labelSelectorItemSelected,
+                    isSelected && { borderColor: labelColor }
+                  ]}
+                  onPress={() => onToggle(label.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.labelLeftContent}>
+                    <View
+                      style={[
+                        styles.labelSelectorColor,
+                        { backgroundColor: labelColor }
+                      ]}
+                    />
+                    <Text style={styles.labelSelectorName}>{label.name || 'Unnamed Label'}</Text>
+                  </View>
+                  {isSelected && (
+                    <View style={[styles.checkmarkContainer, { backgroundColor: labelColor }]}>
+                      <Text style={styles.labelSelectorCheck}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+        )}
       </View>
     </Modal>
   )
@@ -71,7 +117,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20, // Adjust for iOS safe area
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
@@ -80,6 +126,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#1F2937',
+  },
+  closeButtonContainer: {
+    padding: 8,
+    marginRight: -8, // Increase touch area
   },
   closeButton: {
     fontSize: 16,
@@ -93,22 +143,29 @@ const styles = StyleSheet.create({
   labelSelectorItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 16,
     backgroundColor: '#F9FAFB',
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 8,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   labelSelectorItemSelected: {
-    borderColor: '#6366F1',
     backgroundColor: '#EEF2FF',
+  },
+  labelLeftContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   labelSelectorColor: {
     width: 24,
     height: 24,
     borderRadius: 12,
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   labelSelectorName: {
     flex: 1,
@@ -116,9 +173,51 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     fontWeight: '500',
   },
+  checkmarkContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
   labelSelectorCheck: {
-    fontSize: 18,
-    color: '#6366F1',
+    fontSize: 14,
+    color: 'white',
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 })
